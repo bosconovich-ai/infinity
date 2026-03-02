@@ -63,7 +63,7 @@ class ResolveSignalLimitPerDomainTests(unittest.TestCase):
 
     def test_uses_default_when_invalid(self) -> None:
         with patch.dict(os.environ, {"MARKET_SIGNAL_LIMIT_PER_DOMAIN": "abc"}, clear=True):
-            self.assertEqual(resolve_signal_limit_per_domain(), 6)
+            self.assertEqual(resolve_signal_limit_per_domain(), 2)
 
     def test_clamps_limit_to_supported_range(self) -> None:
         with patch.dict(os.environ, {"MARKET_SIGNAL_LIMIT_PER_DOMAIN": "50"}, clear=True):

@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: ${COMPOSE_PROJECT_NAME:-idea-factory}:local
+    user: "${HOST_UID:-1000}:${HOST_GID:-1000}"
     environment:
       APP_PORT: ${APP_PORT:-8000}
       IDEA_FACTORY_HOST: 0.0.0.0

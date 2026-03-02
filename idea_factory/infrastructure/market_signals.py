@@ -64,7 +64,7 @@ class RedditSignalSource:
             headers={"User-Agent": "idea-factory/0.1 (+https://local.idea.factory)"},
         )
         try:
-            with request.urlopen(http_request, timeout=10) as response:
+            with request.urlopen(http_request, timeout=4) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (error.URLError, TimeoutError, json.JSONDecodeError):
             return None
@@ -130,7 +130,7 @@ class GitHubIssueSignalSource:
 
         http_request = request.Request(url, headers=headers)
         try:
-            with request.urlopen(http_request, timeout=10) as response:
+            with request.urlopen(http_request, timeout=4) as response:
                 return json.loads(response.read().decode("utf-8"))
         except (error.URLError, TimeoutError, json.JSONDecodeError):
             return None
@@ -159,12 +159,16 @@ class CompositeMarketSignalCollector:
         limit: int,
     ) -> tuple[MarketSignal, ...]:
         queries = self._build_queries(domain_profile=domain_profile, seed_context=seed_context)
-        per_source_limit = max(1, min(5, limit))
+        per_source_limit = max(1, min(2, limit))
 
         collected: list[MarketSignal] = []
         for query in queries:
             collected.extend(self._reddit.collect(query=query, limit=per_source_limit))
+            if len(self._deduplicate(collected)) >= limit:
+                break
             collected.extend(self._github.collect(query=query, limit=per_source_limit))
+            if len(self._deduplicate(collected)) >= limit:
+                break
 
         deduplicated = self._deduplicate(collected)
         return tuple(deduplicated[:limit])

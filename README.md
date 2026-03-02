@@ -45,6 +45,7 @@ docker compose up --build
 
 By default the app binds to `127.0.0.1:18000` on the host and `8000` inside the container.
 The service exposes a readiness endpoint at `GET /health`.
+The local compose service runs as your host UID/GID by default so generated idea files remain writable on the bind-mounted `ideas/` directory.
 
 ## Testing
 

@@ -63,10 +63,13 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         content_length = int(self.headers.get("Content-Length", "0"))
         raw_body = self.rfile.read(content_length).decode("utf-8")
         form = parse_qs(raw_body)
-        if parsed.path == "/submit":
-            status_message = self._handle_manual_submission(form)
-        else:
-            status_message = self._handle_autonomous_generation(form)
+        try:
+            if parsed.path == "/submit":
+                status_message = self._handle_manual_submission(form)
+            else:
+                status_message = self._handle_autonomous_generation(form)
+        except Exception as exc:
+            status_message = f"Ошибка во время обработки: {exc}"
 
         self._redirect_with_message(status_message)
 
@@ -406,11 +409,11 @@ def parse_generation_count(raw_value: str) -> int:
 def resolve_signal_limit_per_domain() -> int:
     """Resolve how many signals to collect per domain batch."""
 
-    raw_value = os.getenv("MARKET_SIGNAL_LIMIT_PER_DOMAIN", "6")
+    raw_value = os.getenv("MARKET_SIGNAL_LIMIT_PER_DOMAIN", "2")
     try:
         numeric = int(raw_value)
     except ValueError:
-        return 6
+        return 2
     return max(1, min(12, numeric))
 
 
