@@ -40,21 +40,24 @@ def render_page(
   <title>Фабрика идей</title>
   <style>
     :root {{
-      color-scheme: light;
-      --bg: #f4efe5;
-      --panel: #fffaf2;
-      --ink: #1f1a14;
-      --accent: #0c6c56;
-      --warn: #8c5a12;
-      --danger: #8b2e2e;
-      --line: #dbcdb5;
+      color-scheme: dark;
+      --bg: #10151b;
+      --panel: #18212b;
+      --panel-strong: #121a23;
+      --ink: #eef4fb;
+      --muted: #9cb0c3;
+      --accent: #1f9d78;
+      --warn: #c58a2b;
+      --danger: #c04b52;
+      --line: #2c3a49;
     }}
     body {{
       margin: 0;
       font-family: Georgia, "Times New Roman", serif;
       background:
-        radial-gradient(circle at top right, rgba(12,108,86,0.08), transparent 30%),
-        radial-gradient(circle at bottom left, rgba(140,90,18,0.08), transparent 35%),
+        radial-gradient(circle at top right, rgba(31,157,120,0.18), transparent 28%),
+        radial-gradient(circle at bottom left, rgba(197,138,43,0.12), transparent 32%),
+        linear-gradient(160deg, rgba(255,255,255,0.02), transparent 40%),
         var(--bg);
       color: var(--ink);
     }}
@@ -76,17 +79,17 @@ def render_page(
     .flash {{
       padding: 12px 14px;
       border: 1px solid var(--line);
-      background: #fff;
+      background: rgba(24,33,43,0.92);
       border-radius: 12px;
     }}
     .loading {{
       display: none;
       margin-top: 12px;
       padding: 12px 14px;
-      border: 1px solid #d7c6a8;
-      background: #fff4df;
+      border: 1px solid #705522;
+      background: rgba(95,66,18,0.22);
       border-radius: 12px;
-      color: #6b4a12;
+      color: #f0ca82;
       font-size: 0.95rem;
     }}
     .loading.visible {{
@@ -103,7 +106,7 @@ def render_page(
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 20px;
-      box-shadow: 0 8px 24px rgba(31,26,20,0.05);
+      box-shadow: 0 14px 38px rgba(0,0,0,0.28);
     }}
     textarea {{
       width: 100%;
@@ -114,7 +117,8 @@ def render_page(
       font: inherit;
       resize: vertical;
       box-sizing: border-box;
-      background: #fff;
+      background: var(--panel-strong);
+      color: var(--ink);
     }}
     .actions {{
       display: flex;
@@ -128,7 +132,7 @@ def render_page(
       border-radius: 999px;
       padding: 12px 16px;
       font: inherit;
-      background: #fff;
+      background: var(--panel-strong);
       color: var(--ink);
     }}
     button {{
@@ -138,6 +142,7 @@ def render_page(
       font: inherit;
       cursor: pointer;
       color: #fff;
+      box-shadow: inset 0 -1px 0 rgba(0,0,0,0.18);
     }}
     button[value="generate"] {{
       background: #304f9e;
@@ -201,7 +206,7 @@ def render_page(
       font-size: 0.9rem;
     }}
     .idea-card {{
-      background: #fff;
+      background: rgba(18,26,35,0.9);
       border-radius: 14px;
       padding: 14px;
       border: 1px solid var(--line);
@@ -217,15 +222,15 @@ def render_page(
     }}
     .meta {{
       font-size: 0.82rem;
-      color: #6b5b45;
+      color: var(--muted);
     }}
     .score {{
       display: inline-block;
       margin-bottom: 8px;
       padding: 4px 9px;
       border-radius: 999px;
-      background: #efe4cb;
-      color: #694b16;
+      background: rgba(197,138,43,0.18);
+      color: #f3c978;
       font-size: 0.78rem;
     }}
     @media (max-width: 860px) {{
