@@ -18,15 +18,18 @@ def render_page(
 ) -> str:
     """Render the full application page."""
 
-    sections = [
-        ("Автономный инбокс", inbox, IdeaStatus.INBOX),
-        ("Готово к запуску", approved, IdeaStatus.APPROVED),
-        ("Нужно додумать", incubating, IdeaStatus.INCUBATING),
-        ("Отклонено", rejected, IdeaStatus.REJECTED),
-    ]
-    cards_markup = "\n".join(
-        _render_status_section(title=title, cards=cards, status=status)
-        for title, cards, status in sections
+    inbox_markup = _render_status_section(
+        title="Автономный инбокс",
+        cards=inbox,
+        status=IdeaStatus.INBOX,
+    )
+    secondary_markup = "\n".join(
+        _render_status_section(title=title, cards=cards, status=status, compact=True)
+        for title, cards, status in (
+            ("Готово к запуску", approved, IdeaStatus.APPROVED),
+            ("Нужно додумать", incubating, IdeaStatus.INCUBATING),
+            ("Отклонено", rejected, IdeaStatus.REJECTED),
+        )
     )
     flash = f"<p class='flash'>{html.escape(message)}</p>" if message else ""
     return f"""<!doctype html>
@@ -56,7 +59,7 @@ def render_page(
       color: var(--ink);
     }}
     main {{
-      max-width: 1100px;
+      max-width: 1360px;
       margin: 0 auto;
       padding: 32px 20px 48px;
     }}
@@ -91,8 +94,8 @@ def render_page(
     }}
     .layout {{
       display: grid;
-      grid-template-columns: minmax(320px, 1.1fr) minmax(280px, 1fr);
-      gap: 24px;
+      grid-template-columns: minmax(300px, 340px) minmax(0, 1fr);
+      gap: 28px;
       align-items: start;
     }}
     .panel {{
@@ -158,6 +161,33 @@ def render_page(
       display: grid;
       gap: 14px;
     }}
+    .board {{
+      display: grid;
+      gap: 18px;
+    }}
+    .hero-section {{
+      min-height: 58vh;
+    }}
+    .hero-section .idea-card {{
+      padding: 16px;
+    }}
+    .secondary-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }}
+    .compact-section .idea-card {{
+      padding: 12px;
+    }}
+    .compact-section .actions {{
+      gap: 8px;
+      margin-top: 12px;
+    }}
+    .compact-section button {{
+      padding: 10px 12px;
+      font-size: 0.9rem;
+    }}
     .idea-card {{
       background: #fff;
       border-radius: 14px;
@@ -189,6 +219,12 @@ def render_page(
     @media (max-width: 860px) {{
       .layout {{
         grid-template-columns: 1fr;
+      }}
+      .secondary-grid {{
+        grid-template-columns: 1fr;
+      }}
+      .hero-section {{
+        min-height: 0;
       }}
     }}
   </style>
@@ -224,8 +260,13 @@ def render_page(
           </form>
         </section>
       </section>
-      <section class="columns">
-        {cards_markup}
+      <section class="board">
+        <section class="hero-section">
+          {inbox_markup}
+        </section>
+        <section class="secondary-grid">
+          {secondary_markup}
+        </section>
       </section>
     </div>
   </main>
@@ -256,6 +297,7 @@ def _render_status_section(
     title: str,
     cards: Sequence[IdeaCard],
     status: IdeaStatus,
+    compact: bool = False,
 ) -> str:
     items = [
         (
@@ -270,8 +312,9 @@ def _render_status_section(
         for card in cards
     ]
     empty = "<p class='meta'>Пока идей нет.</p>" if not items else ""
+    section_class = "panel compact-section" if compact else "panel"
     return (
-        "<section class='panel'>"
+        f"<section class='{section_class}'>"
         f"<h2>{html.escape(title)}</h2>"
         f"{''.join(items) or empty}"
         "</section>"
