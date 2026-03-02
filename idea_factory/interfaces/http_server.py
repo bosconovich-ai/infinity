@@ -127,10 +127,10 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         incubating = self.context.list_ideas.execute(status=IdeaStatus.INCUBATING, limit=5)
 
         sections = [
-            ("Autonomous Inbox", inbox),
-            ("Ready To Build", approved),
-            ("Needs More Thinking", incubating),
-            ("Rejected", rejected),
+            ("Автономный инбокс", inbox),
+            ("Готово к запуску", approved),
+            ("Нужно додумать", incubating),
+            ("Отклонено", rejected),
         ]
 
         cards_markup = "\n".join(
@@ -147,7 +147,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Idea Factory</title>
+  <title>Фабрика идей</title>
   <style>
     :root {{
       color-scheme: light;
@@ -289,26 +289,26 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
 </head>
 <body>
   <main>
-    <h1>Idea Factory</h1>
-    <p class="lead">Run an autonomous batch across multiple domains or leave a manual project comment. The app saves structured briefs into folders you can review and later hand off to Codex.</p>
+    <h1>Фабрика идей</h1>
+    <p class="lead">Запускай автономную генерацию по разным доменам или оставляй идею вручную. Приложение сохраняет структурированные брифы в папки, которые потом можно спокойно просмотреть и передать в Codex.</p>
     {flash}
     <div class="layout">
       <section class="columns">
         <section class="panel">
-          <h2>Autonomous Factory</h2>
-          <p class="meta">Generates up to 100 ideas, rotates domains and prompt angles, scrapes live market signals, uses a higher creativity temperature, and self-scores each idea from 1 to 10.</p>
+          <h2>Автономная генерация</h2>
+          <p class="meta">Генерирует до 100 идей, ротирует домены и углы промпта, подтягивает рыночные сигналы, использует повышенную креативность модели и сама ставит оценку от 1 до 10.</p>
           <form method="post" action="/generate">
-            <textarea name="seed_context" placeholder="Optional guidance: domains you like, product shapes to favor, constraints to avoid..."></textarea>
+            <textarea name="seed_context" placeholder="Необязательные вводные: какие рынки тебе интересны, какие продукты предпочитать, чего избегать..."></textarea>
             <div class="actions">
               <input type="number" name="count" min="1" max="100" value="12">
-              <button type="submit" name="mode" value="generate">Generate Inbox</button>
+              <button type="submit" name="mode" value="generate">Сгенерировать</button>
             </div>
           </form>
         </section>
         <section class="panel">
-          <h2>Manual Comment</h2>
+          <h2>Ручной ввод</h2>
           <form method="post" action="/submit">
-            <textarea name="comment" placeholder="Describe the workflow, pain point, who pays, or rough project idea..."></textarea>
+            <textarea name="comment" placeholder="Опиши процесс, боль, кто платит, или просто набросай идею проекта..."></textarea>
             <div class="actions">
               <button type="submit" name="decision" value="do">Делать</button>
               <button type="submit" name="decision" value="rethink">Додумать</button>
@@ -337,7 +337,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
             )
             for card in cards
         ]
-        empty = "<p class='meta'>No ideas yet.</p>" if not items else ""
+        empty = "<p class='meta'>Пока идей нет.</p>" if not items else ""
         return (
             "<section class='panel'>"
             f"<h2>{html.escape(title)}</h2>"
@@ -348,7 +348,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
     def _render_score(self, score: object) -> str:
         if score is None:
             return ""
-        return f"<div class='score'>Score: {html.escape(f'{float(score):.1f}/10')}</div>"
+        return f"<div class='score'>Оценка: {html.escape(f'{float(score):.1f}/10')}</div>"
 
 
 def build_app_context() -> AppContext:
