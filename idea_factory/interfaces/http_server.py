@@ -1,8 +1,7 @@
-"""Tiny HTTP interface with a textarea and three decision buttons."""
+"""Tiny HTTP interface with idea intake and inbox review actions."""
 
 from __future__ import annotations
 
-import html
 import os
 from dataclasses import dataclass
 from http import HTTPStatus
@@ -15,10 +14,12 @@ from idea_factory.infrastructure.file_repository import MarkdownIdeaRepository
 from idea_factory.infrastructure.market_signals import CompositeMarketSignalCollector
 from idea_factory.infrastructure.openrouter_llm import build_default_structurer
 from idea_factory.infrastructure.runtime import SystemClock, TimestampIdGenerator
+from idea_factory.interfaces.page_renderer import render_page
 from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
     GenerateAutonomousIdeasUseCase,
     ListIdeasByStatusUseCase,
+    ReviewInboxIdeaUseCase,
 )
 
 
@@ -29,6 +30,7 @@ class AppContext:
     create_idea: CreateIdeaFromCommentUseCase
     generate_autonomous_ideas: GenerateAutonomousIdeasUseCase
     list_ideas: ListIdeasByStatusUseCase
+    review_inbox_idea: ReviewInboxIdeaUseCase
 
 
 class IdeaFactoryHandler(BaseHTTPRequestHandler):
@@ -56,7 +58,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         """Handle project comment submission."""
 
         parsed = urlparse(self.path)
-        if parsed.path not in {"/submit", "/generate"}:
+        if parsed.path not in {"/submit", "/generate", "/review"}:
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
 
@@ -66,8 +68,10 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/submit":
                 status_message = self._handle_manual_submission(form)
-            else:
+            elif parsed.path == "/generate":
                 status_message = self._handle_autonomous_generation(form)
+            else:
+                status_message = self._handle_review_submission(form)
         except Exception as exc:
             status_message = f"Ошибка во время обработки: {exc}"
 
@@ -107,6 +111,19 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         )
         return f"Generated {result.generated_count} inbox ideas."
 
+    def _handle_review_submission(self, form: dict[str, list[str]]) -> str:
+        idea_id = form.get("idea_id", [""])[0]
+        decision_value = form.get("decision", [""])[0]
+        if not idea_id:
+            return "Не удалось определить идею для разбора."
+
+        decision = DecisionAction(decision_value)
+        result = self.context.review_inbox_idea.execute(idea_id=idea_id, decision=decision)
+        return (
+            f"Идея '{result.card.title}' перенесена в "
+            f"{status_label(result.card.status)}."
+        )
+
     def _send_html(self, content: str) -> None:
         body = content.encode("utf-8")
         self.send_response(HTTPStatus.OK)
@@ -128,268 +145,13 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         approved = self.context.list_ideas.execute(status=IdeaStatus.APPROVED, limit=5)
         rejected = self.context.list_ideas.execute(status=IdeaStatus.REJECTED, limit=5)
         incubating = self.context.list_ideas.execute(status=IdeaStatus.INCUBATING, limit=5)
-
-        sections = [
-            ("Автономный инбокс", inbox),
-            ("Готово к запуску", approved),
-            ("Нужно додумать", incubating),
-            ("Отклонено", rejected),
-        ]
-
-        cards_markup = "\n".join(
-            self._render_status_section(title=title, cards=cards)
-            for title, cards in sections
+        return render_page(
+            message=message,
+            inbox=inbox,
+            approved=approved,
+            incubating=incubating,
+            rejected=rejected,
         )
-        flash = (
-            f"<p class='flash'>{html.escape(message)}</p>"
-            if message
-            else ""
-        )
-        return f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Фабрика идей</title>
-  <style>
-    :root {{
-      color-scheme: light;
-      --bg: #f4efe5;
-      --panel: #fffaf2;
-      --ink: #1f1a14;
-      --accent: #0c6c56;
-      --warn: #8c5a12;
-      --danger: #8b2e2e;
-      --line: #dbcdb5;
-    }}
-    body {{
-      margin: 0;
-      font-family: Georgia, "Times New Roman", serif;
-      background:
-        radial-gradient(circle at top right, rgba(12,108,86,0.08), transparent 30%),
-        radial-gradient(circle at bottom left, rgba(140,90,18,0.08), transparent 35%),
-        var(--bg);
-      color: var(--ink);
-    }}
-    main {{
-      max-width: 1100px;
-      margin: 0 auto;
-      padding: 32px 20px 48px;
-    }}
-    h1 {{
-      margin-bottom: 8px;
-      font-size: clamp(2rem, 4vw, 3.5rem);
-    }}
-    p.lead {{
-      margin-top: 0;
-      max-width: 760px;
-      font-size: 1.05rem;
-      line-height: 1.5;
-    }}
-    .flash {{
-      padding: 12px 14px;
-      border: 1px solid var(--line);
-      background: #fff;
-      border-radius: 12px;
-    }}
-    .loading {{
-      display: none;
-      margin-top: 12px;
-      padding: 12px 14px;
-      border: 1px solid #d7c6a8;
-      background: #fff4df;
-      border-radius: 12px;
-      color: #6b4a12;
-      font-size: 0.95rem;
-    }}
-    .loading.visible {{
-      display: block;
-    }}
-    .layout {{
-      display: grid;
-      grid-template-columns: minmax(320px, 1.1fr) minmax(280px, 1fr);
-      gap: 24px;
-      align-items: start;
-    }}
-    .panel {{
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 20px;
-      box-shadow: 0 8px 24px rgba(31,26,20,0.05);
-    }}
-    textarea {{
-      width: 100%;
-      min-height: 240px;
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 14px;
-      font: inherit;
-      resize: vertical;
-      box-sizing: border-box;
-      background: #fff;
-    }}
-    .actions {{
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-top: 16px;
-    }}
-    input[type="number"] {{
-      width: 120px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 12px 16px;
-      font: inherit;
-      background: #fff;
-      color: var(--ink);
-    }}
-    button {{
-      border: 0;
-      border-radius: 999px;
-      padding: 12px 16px;
-      font: inherit;
-      cursor: pointer;
-      color: #fff;
-    }}
-    button[value="generate"] {{
-      background: #304f9e;
-    }}
-    button[value="do"] {{
-      background: var(--accent);
-    }}
-    button[value="rethink"] {{
-      background: var(--warn);
-    }}
-    button[value="dont"] {{
-      background: var(--danger);
-    }}
-    button[disabled],
-    input[disabled],
-    textarea[disabled] {{
-      opacity: 0.6;
-      cursor: wait;
-    }}
-    .columns {{
-      display: grid;
-      gap: 14px;
-    }}
-    .idea-card {{
-      background: #fff;
-      border-radius: 14px;
-      padding: 14px;
-      border: 1px solid var(--line);
-    }}
-    .idea-card h3 {{
-      margin: 0 0 6px;
-      font-size: 1rem;
-    }}
-    .idea-card p {{
-      margin: 0 0 8px;
-      line-height: 1.4;
-      font-size: 0.95rem;
-    }}
-    .meta {{
-      font-size: 0.82rem;
-      color: #6b5b45;
-    }}
-    .score {{
-      display: inline-block;
-      margin-bottom: 8px;
-      padding: 4px 9px;
-      border-radius: 999px;
-      background: #efe4cb;
-      color: #694b16;
-      font-size: 0.78rem;
-    }}
-    @media (max-width: 860px) {{
-      .layout {{
-        grid-template-columns: 1fr;
-      }}
-    }}
-  </style>
-</head>
-<body>
-  <main>
-    <h1>Фабрика идей</h1>
-    <p class="lead">Запускай автономную генерацию по разным доменам или оставляй идею вручную. Приложение сохраняет структурированные брифы в папки, которые потом можно спокойно просмотреть и передать в Codex.</p>
-    {flash}
-    <div id="loading-indicator" class="loading" aria-live="polite"></div>
-    <div class="layout">
-      <section class="columns">
-        <section class="panel">
-          <h2>Автономная генерация</h2>
-          <p class="meta">Генерирует до 100 идей, ротирует домены и углы промпта, подтягивает рыночные сигналы, использует повышенную креативность модели и сама ставит оценку от 1 до 10.</p>
-          <form method="post" action="/generate" data-loading-message="Идёт генерация идей. Это может занять до минуты из-за скрапинга и вызова модели.">
-            <textarea name="seed_context" placeholder="Необязательные вводные: какие рынки тебе интересны, какие продукты предпочитать, чего избегать..."></textarea>
-            <div class="actions">
-              <input type="number" name="count" min="1" max="100" value="12">
-              <button type="submit" name="mode" value="generate">Сгенерировать</button>
-            </div>
-          </form>
-        </section>
-        <section class="panel">
-          <h2>Ручной ввод</h2>
-          <form method="post" action="/submit" data-loading-message="Идёт обработка идеи и сохранение карточки.">
-            <textarea name="comment" placeholder="Опиши процесс, боль, кто платит, или просто набросай идею проекта..."></textarea>
-            <div class="actions">
-              <button type="submit" name="decision" value="do">Делать</button>
-              <button type="submit" name="decision" value="rethink">Додумать</button>
-              <button type="submit" name="decision" value="dont">Не делать</button>
-            </div>
-          </form>
-        </section>
-      </section>
-      <section class="columns">
-        {cards_markup}
-      </section>
-    </div>
-  </main>
-  <script>
-    (function () {{
-      const indicator = document.getElementById("loading-indicator");
-      if (!indicator) {{
-        return;
-      }}
-      for (const form of document.querySelectorAll("form[data-loading-message]")) {{
-        form.addEventListener("submit", () => {{
-          const message = form.getAttribute("data-loading-message") || "Идёт обработка...";
-          indicator.textContent = message;
-          indicator.classList.add("visible");
-          for (const field of form.querySelectorAll("button, input, textarea")) {{
-            field.disabled = true;
-          }}
-        }});
-      }}
-    }})();
-  </script>
-</body>
-</html>"""
-
-    def _render_status_section(self, *, title: str, cards: list[object]) -> str:
-        items = [
-            (
-                "<article class='idea-card'>"
-                f"<h3>{html.escape(card.title)}</h3>"
-                f"<p>{html.escape(card.one_liner)}</p>"
-                f"{self._render_score(card.score)}"
-                f"<div class='meta'>{html.escape(card.created_at.isoformat())}</div>"
-                "</article>"
-            )
-            for card in cards
-        ]
-        empty = "<p class='meta'>Пока идей нет.</p>" if not items else ""
-        return (
-            "<section class='panel'>"
-            f"<h2>{html.escape(title)}</h2>"
-            f"{''.join(items) or empty}"
-            "</section>"
-        )
-
-    def _render_score(self, score: object) -> str:
-        if score is None:
-            return ""
-        return f"<div class='score'>Оценка: {html.escape(f'{float(score):.1f}/10')}</div>"
 
 
 def build_app_context() -> AppContext:
@@ -414,10 +176,12 @@ def build_app_context() -> AppContext:
         signals_per_domain=resolve_signal_limit_per_domain(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
+    review_inbox_idea = ReviewInboxIdeaUseCase(repository=repository)
     return AppContext(
         create_idea=create_idea,
         generate_autonomous_ideas=generate_autonomous_ideas,
         list_ideas=list_ideas,
+        review_inbox_idea=review_inbox_idea,
     )
 
 
@@ -462,6 +226,18 @@ def build_signal_collector() -> CompositeMarketSignalCollector | None:
     if enabled.lower() in {"0", "false", "no"}:
         return None
     return CompositeMarketSignalCollector()
+
+
+def status_label(status: IdeaStatus) -> str:
+    """Return a human-readable Russian label for one idea status."""
+
+    labels = {
+        IdeaStatus.INBOX: "Автономный инбокс",
+        IdeaStatus.APPROVED: "Готово к запуску",
+        IdeaStatus.INCUBATING: "Нужно додумать",
+        IdeaStatus.REJECTED: "Отклонено",
+    }
+    return labels[status]
 
 
 def main() -> None:

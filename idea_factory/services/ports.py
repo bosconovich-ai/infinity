@@ -59,6 +59,12 @@ class IdeaRepositoryPort(Protocol):
     ) -> Sequence[IdeaCard]:
         """Return recent cards for a given status."""
 
+    def get_by_id(self, idea_id: str) -> IdeaCard | None:
+        """Return one idea card by id if it exists."""
+
+    def move_to_status(self, idea_id: str, *, status: IdeaStatus) -> Path:
+        """Move an existing idea card into another status bucket."""
+
 
 class ClockPort(Protocol):
     """Provide current time for deterministic services."""

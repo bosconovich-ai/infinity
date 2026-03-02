@@ -51,6 +51,62 @@ class MarkdownIdeaRepository:
         paths = sorted(directory.glob("*.md"), key=lambda item: item.stat().st_mtime, reverse=True)
         return [self._deserialize(path.read_text(encoding="utf-8")) for path in paths[:limit]]
 
+    def get_by_id(self, idea_id: str) -> IdeaCard | None:
+        """Load a card by id across all status directories.
+
+        Args:
+            idea_id: Stable idea identifier.
+
+        Returns:
+            Parsed idea card if found, else None.
+        """
+
+        located_path = self._find_path_by_id(idea_id)
+        if located_path is None:
+            return None
+        return self._deserialize(located_path.read_text(encoding="utf-8"))
+
+    def move_to_status(self, idea_id: str, *, status: IdeaStatus) -> Path:
+        """Move a saved idea card to another status bucket.
+
+        Args:
+            idea_id: Existing card identifier.
+            status: Target status.
+
+        Returns:
+            New file path after the move.
+
+        Raises:
+            FileNotFoundError: If no card exists with the requested id.
+        """
+
+        located_path = self._find_path_by_id(idea_id)
+        if located_path is None:
+            raise FileNotFoundError(f"Idea '{idea_id}' was not found.")
+
+        card = self._deserialize(located_path.read_text(encoding="utf-8"))
+        updated_card = IdeaCard(
+            idea_id=card.idea_id,
+            status=status,
+            created_at=card.created_at,
+            title=card.title,
+            one_liner=card.one_liner,
+            problem=card.problem,
+            target_user=card.target_user,
+            why_subscription=card.why_subscription,
+            acquisition_channel=card.acquisition_channel,
+            key_features=card.key_features,
+            risks=card.risks,
+            source_signals=card.source_signals,
+            agent_notes=card.agent_notes,
+            human_comment=card.human_comment,
+            score=card.score,
+        )
+        new_path = self.save(updated_card)
+        if located_path != new_path and located_path.exists():
+            located_path.unlink()
+        return new_path
+
     def _serialize(self, card: IdeaCard) -> str:
         metadata = {
             "id": card.idea_id,
@@ -153,3 +209,13 @@ class MarkdownIdeaRepository:
             key, _, raw_value = line.partition(":")
             metadata[key.strip()] = json.loads(raw_value.strip())
         return metadata
+
+    def _find_path_by_id(self, idea_id: str) -> Path | None:
+        for status in IdeaStatus:
+            directory = self._root / status.value
+            if not directory.exists():
+                continue
+            matches = sorted(directory.glob(f"{idea_id}-*.md"))
+            if matches:
+                return matches[0]
+        return None

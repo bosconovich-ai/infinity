@@ -15,6 +15,7 @@ from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
     GenerateAutonomousIdeasUseCase,
     ListIdeasByStatusUseCase,
+    ReviewInboxIdeaUseCase,
 )
 
 
@@ -191,6 +192,54 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
 
             self.assertIn("Signals:", result.cards[0].human_comment)
             self.assertIn("Market signals:", result.cards[0].human_comment)
+
+
+class ReviewInboxIdeaUseCaseTests(unittest.TestCase):
+    """Verify inbox ideas can be moved into review buckets."""
+
+    def test_moves_inbox_idea_to_approved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            generate_use_case = GenerateAutonomousIdeasUseCase(
+                ideation_llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+            )
+            batch_result = generate_use_case.execute(requested_count=1)
+
+            review_use_case = ReviewInboxIdeaUseCase(repository=repository)
+            result = review_use_case.execute(
+                idea_id=batch_result.cards[0].idea_id,
+                decision=DecisionAction.DO,
+            )
+
+            self.assertEqual(result.card.status, IdeaStatus.APPROVED)
+            self.assertIn("approved", str(result.path))
+            self.assertIsNone(
+                repository.get_by_id("missing-idea-id"),
+            )
+
+    def test_rejects_review_for_non_inbox_idea(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            create_use_case = CreateIdeaFromCommentUseCase(
+                llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+            )
+            saved = create_use_case.execute(
+                raw_comment="Track refund spikes for Shopify stores",
+                decision=DecisionAction.DO,
+            )
+
+            review_use_case = ReviewInboxIdeaUseCase(repository=repository)
+            with self.assertRaises(ValueError):
+                review_use_case.execute(
+                    idea_id=saved.card.idea_id,
+                    decision=DecisionAction.DONT,
+                )
 
 
 class ListIdeasByStatusUseCaseTests(unittest.TestCase):

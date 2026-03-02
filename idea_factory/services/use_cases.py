@@ -43,6 +43,14 @@ class SavedIdeaBatchResult:
     paths: tuple[Path, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ReviewedIdeaResult:
+    """Result returned after moving an inbox idea into a target bucket."""
+
+    card: IdeaCard
+    path: Path
+
+
 class CreateIdeaFromCommentUseCase:
     """Turn a free-form comment into a persisted idea card."""
 
@@ -265,6 +273,46 @@ class GenerateAutonomousIdeasUseCase:
                 f"[{signal.source}] {signal.title}: {signal.summary}"
             )
         return " Market signals: " + " | ".join(formatted)
+
+
+class ReviewInboxIdeaUseCase:
+    """Move an inbox idea into an explicit review bucket."""
+
+    def __init__(self, *, repository: IdeaRepositoryPort) -> None:
+        self._repository = repository
+
+    def execute(
+        self,
+        *,
+        idea_id: str,
+        decision: DecisionAction,
+    ) -> ReviewedIdeaResult:
+        """Review one inbox idea and move it to the chosen status.
+
+        Args:
+            idea_id: Existing inbox idea id.
+            decision: Human review decision.
+
+        Returns:
+            Updated card and new file path.
+
+        Raises:
+            FileNotFoundError: If the card is missing.
+            ValueError: If the card is not currently in inbox.
+        """
+
+        card = self._repository.get_by_id(idea_id)
+        if card is None:
+            raise FileNotFoundError(f"Idea '{idea_id}' was not found.")
+        if card.status is not IdeaStatus.INBOX:
+            raise ValueError("Можно разбирать только идеи из автономного инбокса.")
+
+        target_status = status_for_decision(decision)
+        path = self._repository.move_to_status(idea_id, status=target_status)
+        updated_card = self._repository.get_by_id(idea_id)
+        if updated_card is None:
+            raise FileNotFoundError(f"Idea '{idea_id}' disappeared after move.")
+        return ReviewedIdeaResult(card=updated_card, path=path)
 
 
 class ListIdeasByStatusUseCase:
