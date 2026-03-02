@@ -7,9 +7,14 @@ import unittest
 from datetime import UTC, datetime
 from pathlib import Path
 
+from idea_factory.domain.ideation import IdeationDomainProfile
 from idea_factory.domain.models import DecisionAction, IdeaStatus, StructuredIdeaDraft
 from idea_factory.infrastructure.file_repository import MarkdownIdeaRepository
-from idea_factory.services.use_cases import CreateIdeaFromCommentUseCase, ListIdeasByStatusUseCase
+from idea_factory.services.use_cases import (
+    CreateIdeaFromCommentUseCase,
+    GenerateAutonomousIdeasUseCase,
+    ListIdeasByStatusUseCase,
+)
 
 
 class FakeLLM:
@@ -30,6 +35,33 @@ class FakeLLM:
             score=8.2,
         )
 
+    def generate_ideas(
+        self,
+        *,
+        batch_size: int,
+        seed_context: str,
+        domain_profile: IdeationDomainProfile,
+        creative_angle: str,
+    ) -> tuple[StructuredIdeaDraft, ...]:
+        drafts = []
+        for index in range(batch_size):
+            drafts.append(
+                StructuredIdeaDraft(
+                    title=f"{domain_profile.name} Idea {index + 1}",
+                    one_liner=f"{domain_profile.name} summary {index + 1}",
+                    problem=f"{domain_profile.name} recurring pain",
+                    target_user=domain_profile.audience,
+                    why_subscription="Recurring workflow means recurring value.",
+                    acquisition_channel=domain_profile.acquisition_channel,
+                    key_features=("Alerts", "Weekly digest", "Dashboard"),
+                    risks=("Needs validation",),
+                    source_signals=(creative_angle, seed_context or "no-seed"),
+                    agent_notes="Autonomous batch idea.",
+                    score=7.5,
+                )
+            )
+        return tuple(drafts)
+
 
 class FixedClock:
     """Return a deterministic timestamp."""
@@ -42,7 +74,7 @@ class FixedIdGenerator:
     """Return a deterministic idea id."""
 
     def new_id(self, created_at: datetime) -> str:
-        return "idea_20260302_123000"
+        return created_at.strftime("idea_%Y%m%d_%H%M%S_%f")
 
 
 class CreateIdeaFromCommentUseCaseTests(unittest.TestCase):
@@ -80,6 +112,45 @@ class CreateIdeaFromCommentUseCaseTests(unittest.TestCase):
 
             with self.assertRaises(ValueError):
                 use_case.execute(raw_comment="   ", decision=DecisionAction.DONT)
+
+
+class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
+    """Verify autonomous batches land in the inbox."""
+
+    def test_generates_inbox_cards(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            use_case = GenerateAutonomousIdeasUseCase(
+                ideation_llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+            )
+
+            result = use_case.execute(
+                requested_count=3,
+                seed_context="Prefer operational B2B SaaS",
+            )
+
+            self.assertEqual(result.generated_count, 3)
+            self.assertEqual(len(result.cards), 3)
+            self.assertTrue(all(card.status == IdeaStatus.INBOX for card in result.cards))
+            self.assertTrue(all(path.exists() for path in result.paths))
+            self.assertTrue(all("inbox" in str(path) for path in result.paths))
+
+    def test_caps_requested_count_at_100(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            use_case = GenerateAutonomousIdeasUseCase(
+                ideation_llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+            )
+
+            result = use_case.execute(requested_count=150)
+
+            self.assertEqual(result.generated_count, 100)
 
 
 class ListIdeasByStatusUseCaseTests(unittest.TestCase):

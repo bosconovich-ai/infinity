@@ -16,6 +16,7 @@ from idea_factory.infrastructure.openrouter_llm import build_default_structurer
 from idea_factory.infrastructure.runtime import SystemClock, TimestampIdGenerator
 from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
+    GenerateAutonomousIdeasUseCase,
     ListIdeasByStatusUseCase,
 )
 
@@ -25,6 +26,7 @@ class AppContext:
     """Container for interface dependencies."""
 
     create_idea: CreateIdeaFromCommentUseCase
+    generate_autonomous_ideas: GenerateAutonomousIdeasUseCase
     list_ideas: ListIdeasByStatusUseCase
 
 
@@ -53,25 +55,17 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         """Handle project comment submission."""
 
         parsed = urlparse(self.path)
-        if parsed.path != "/submit":
+        if parsed.path not in {"/submit", "/generate"}:
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
 
         content_length = int(self.headers.get("Content-Length", "0"))
         raw_body = self.rfile.read(content_length).decode("utf-8")
         form = parse_qs(raw_body)
-        comment = form.get("comment", [""])[0]
-        decision_value = form.get("decision", [""])[0]
-
-        try:
-            decision = DecisionAction(decision_value)
-            result = self.context.create_idea.execute(raw_comment=comment, decision=decision)
-            status_message = (
-                f"Saved '{result.card.title}' to "
-                f"{result.card.status.value}/{result.path.name}"
-            )
-        except ValueError as exc:
-            status_message = str(exc)
+        if parsed.path == "/submit":
+            status_message = self._handle_manual_submission(form)
+        else:
+            status_message = self._handle_autonomous_generation(form)
 
         self._redirect_with_message(status_message)
 
@@ -85,6 +79,29 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.SEE_OTHER)
         self.send_header("Location", f"/?message={quoted}")
         self.end_headers()
+
+    def _handle_manual_submission(self, form: dict[str, list[str]]) -> str:
+        comment = form.get("comment", [""])[0]
+        decision_value = form.get("decision", [""])[0]
+
+        try:
+            decision = DecisionAction(decision_value)
+            result = self.context.create_idea.execute(raw_comment=comment, decision=decision)
+            return (
+                f"Saved '{result.card.title}' to "
+                f"{result.card.status.value}/{result.path.name}"
+            )
+        except ValueError as exc:
+            return str(exc)
+
+    def _handle_autonomous_generation(self, form: dict[str, list[str]]) -> str:
+        requested_count = parse_generation_count(form.get("count", ["12"])[0])
+        seed_context = form.get("seed_context", [""])[0]
+        result = self.context.generate_autonomous_ideas.execute(
+            requested_count=requested_count,
+            seed_context=seed_context,
+        )
+        return f"Generated {result.generated_count} inbox ideas."
 
     def _send_html(self, content: str) -> None:
         body = content.encode("utf-8")
@@ -103,11 +120,13 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _render_page(self, *, message: str) -> str:
+        inbox = self.context.list_ideas.execute(status=IdeaStatus.INBOX, limit=12)
         approved = self.context.list_ideas.execute(status=IdeaStatus.APPROVED, limit=5)
         rejected = self.context.list_ideas.execute(status=IdeaStatus.REJECTED, limit=5)
         incubating = self.context.list_ideas.execute(status=IdeaStatus.INCUBATING, limit=5)
 
         sections = [
+            ("Autonomous Inbox", inbox),
             ("Ready To Build", approved),
             ("Needs More Thinking", incubating),
             ("Rejected", rejected),
@@ -199,6 +218,15 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       gap: 10px;
       margin-top: 16px;
     }}
+    input[type="number"] {{
+      width: 120px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 12px 16px;
+      font: inherit;
+      background: #fff;
+      color: var(--ink);
+    }}
     button {{
       border: 0;
       border-radius: 999px;
@@ -206,6 +234,9 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       font: inherit;
       cursor: pointer;
       color: #fff;
+    }}
+    button[value="generate"] {{
+      background: #304f9e;
     }}
     button[value="do"] {{
       background: var(--accent);
@@ -239,6 +270,15 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       font-size: 0.82rem;
       color: #6b5b45;
     }}
+    .score {{
+      display: inline-block;
+      margin-bottom: 8px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: #efe4cb;
+      color: #694b16;
+      font-size: 0.78rem;
+    }}
     @media (max-width: 860px) {{
       .layout {{
         grid-template-columns: 1fr;
@@ -249,19 +289,32 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
 <body>
   <main>
     <h1>Idea Factory</h1>
-    <p class="lead">Leave a raw project comment, choose what to do with it, and the app will save a structured brief into the matching folder for later Codex work.</p>
+    <p class="lead">Run an autonomous batch across multiple domains or leave a manual project comment. The app saves structured briefs into folders you can review and later hand off to Codex.</p>
     {flash}
     <div class="layout">
-      <section class="panel">
-        <h2>New Comment</h2>
-        <form method="post" action="/submit">
-          <textarea name="comment" placeholder="Describe the workflow, pain point, who pays, or rough project idea..."></textarea>
-          <div class="actions">
-            <button type="submit" name="decision" value="do">Делать</button>
-            <button type="submit" name="decision" value="rethink">Додумать</button>
-            <button type="submit" name="decision" value="dont">Не делать</button>
-          </div>
-        </form>
+      <section class="columns">
+        <section class="panel">
+          <h2>Autonomous Factory</h2>
+          <p class="meta">Generates up to 100 ideas, rotates domains and prompt angles, uses a higher creativity temperature, and self-scores each idea from 1 to 10.</p>
+          <form method="post" action="/generate">
+            <textarea name="seed_context" placeholder="Optional guidance: domains you like, product shapes to favor, constraints to avoid..."></textarea>
+            <div class="actions">
+              <input type="number" name="count" min="1" max="100" value="12">
+              <button type="submit" name="mode" value="generate">Generate Inbox</button>
+            </div>
+          </form>
+        </section>
+        <section class="panel">
+          <h2>Manual Comment</h2>
+          <form method="post" action="/submit">
+            <textarea name="comment" placeholder="Describe the workflow, pain point, who pays, or rough project idea..."></textarea>
+            <div class="actions">
+              <button type="submit" name="decision" value="do">Делать</button>
+              <button type="submit" name="decision" value="rethink">Додумать</button>
+              <button type="submit" name="decision" value="dont">Не делать</button>
+            </div>
+          </form>
+        </section>
       </section>
       <section class="columns">
         {cards_markup}
@@ -277,6 +330,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
                 "<article class='idea-card'>"
                 f"<h3>{html.escape(card.title)}</h3>"
                 f"<p>{html.escape(card.one_liner)}</p>"
+                f"{self._render_score(card.score)}"
                 f"<div class='meta'>{html.escape(card.created_at.isoformat())}</div>"
                 "</article>"
             )
@@ -290,20 +344,36 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
             "</section>"
         )
 
+    def _render_score(self, score: object) -> str:
+        if score is None:
+            return ""
+        return f"<div class='score'>Score: {html.escape(f'{float(score):.1f}/10')}</div>"
+
 
 def build_app_context() -> AppContext:
     """Wire default dependencies for the HTTP interface."""
 
     storage_root = Path(os.getenv("IDEA_STORAGE_ROOT", "ideas"))
     repository = MarkdownIdeaRepository(storage_root)
+    structurer = build_default_structurer()
     create_idea = CreateIdeaFromCommentUseCase(
-        llm=build_default_structurer(),
+        llm=structurer,
+        repository=repository,
+        clock=SystemClock(),
+        id_generator=TimestampIdGenerator(),
+    )
+    generate_autonomous_ideas = GenerateAutonomousIdeasUseCase(
+        ideation_llm=structurer,
         repository=repository,
         clock=SystemClock(),
         id_generator=TimestampIdGenerator(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
-    return AppContext(create_idea=create_idea, list_ideas=list_ideas)
+    return AppContext(
+        create_idea=create_idea,
+        generate_autonomous_ideas=generate_autonomous_ideas,
+        list_ideas=list_ideas,
+    )
 
 
 def resolve_server_host() -> str:
@@ -317,6 +387,16 @@ def resolve_server_port() -> int:
 
     port_value = os.getenv("IDEA_FACTORY_PORT") or os.getenv("APP_PORT", "8000")
     return int(port_value)
+
+
+def parse_generation_count(raw_value: str) -> int:
+    """Parse user-provided batch size into a safe integer."""
+
+    try:
+        numeric = int(raw_value)
+    except ValueError:
+        return 12
+    return max(1, min(100, numeric))
 
 
 def main() -> None:

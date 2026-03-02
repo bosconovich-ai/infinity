@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Protocol, Sequence
 
+from idea_factory.domain.ideation import IdeationDomainProfile
 from idea_factory.domain.models import IdeaCard, IdeaStatus, StructuredIdeaDraft
 
 
@@ -14,6 +15,20 @@ class LLMPort(Protocol):
 
     def structure_comment(self, raw_comment: str) -> StructuredIdeaDraft:
         """Convert free-form text into a normalized idea draft."""
+
+
+class AutonomousIdeationPort(Protocol):
+    """Generate batches of autonomous project ideas."""
+
+    def generate_ideas(
+        self,
+        *,
+        batch_size: int,
+        seed_context: str,
+        domain_profile: IdeationDomainProfile,
+        creative_angle: str,
+    ) -> Sequence[StructuredIdeaDraft]:
+        """Generate a batch of structured ideas for one domain focus."""
 
 
 class IdeaRepositoryPort(Protocol):

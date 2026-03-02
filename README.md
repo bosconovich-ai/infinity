@@ -19,10 +19,19 @@ Then open `http://127.0.0.1:8000`.
 
 - `OPENROUTER_API_KEY`: Optional. Enables external LLM structuring.
 - `OPENROUTER_MODEL`: Optional. Defaults to `qwen/qwen3.5-397b-a17b`.
+- `OPENROUTER_IDEATION_TEMPERATURE`: Optional. Defaults to `1.15` for autonomous generation.
 - `IDEA_STORAGE_ROOT`: Optional. Defaults to `./ideas`.
 - `IDEA_FACTORY_HOST`: Optional. Defaults to `127.0.0.1`.
 - `IDEA_FACTORY_PORT`: Optional. Defaults to `8000`.
 - `APP_PORT`: Optional fallback for containerized runs when `IDEA_FACTORY_PORT` is not set.
+
+## Autonomous Factory
+
+- Generate up to 100 ideas into `ideas/inbox`.
+- The generator rotates through multiple domain profiles.
+- Each batch mutates its prompt with a different creative angle.
+- The model self-scores each idea from `1` to `10`.
+- Optional seed context lets you bias the batch toward specific markets or constraints.
 
 ## Container
 

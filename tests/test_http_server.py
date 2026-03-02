@@ -6,7 +6,11 @@ import os
 import unittest
 from unittest.mock import patch
 
-from idea_factory.interfaces.http_server import resolve_server_host, resolve_server_port
+from idea_factory.interfaces.http_server import (
+    parse_generation_count,
+    resolve_server_host,
+    resolve_server_port,
+)
 
 
 class ResolveServerHostTests(unittest.TestCase):
@@ -39,3 +43,14 @@ class ResolveServerPortTests(unittest.TestCase):
             clear=True,
         ):
             self.assertEqual(resolve_server_port(), 7000)
+
+
+class ParseGenerationCountTests(unittest.TestCase):
+    """Verify batch size parsing stays resilient."""
+
+    def test_returns_default_for_invalid_values(self) -> None:
+        self.assertEqual(parse_generation_count("abc"), 12)
+
+    def test_clamps_values_to_supported_range(self) -> None:
+        self.assertEqual(parse_generation_count("250"), 100)
+        self.assertEqual(parse_generation_count("-4"), 1)

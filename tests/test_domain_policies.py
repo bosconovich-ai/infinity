@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import unittest
 
+from idea_factory.domain.ideation import clamp_idea_generation_count
 from idea_factory.domain.models import DecisionAction, IdeaStatus
 from idea_factory.domain.policies import slugify_title, status_for_decision
 
@@ -29,3 +30,13 @@ class SlugifyTitleTests(unittest.TestCase):
 
     def test_falls_back_when_title_is_empty(self) -> None:
         self.assertEqual(slugify_title("   "), "idea")
+
+
+class ClampIdeaGenerationCountTests(unittest.TestCase):
+    """Verify autonomous generation count stays in the supported range."""
+
+    def test_caps_count_at_100(self) -> None:
+        self.assertEqual(clamp_idea_generation_count(250), 100)
+
+    def test_raises_small_values_to_one(self) -> None:
+        self.assertEqual(clamp_idea_generation_count(0), 1)

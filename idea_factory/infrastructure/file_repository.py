@@ -114,7 +114,7 @@ class MarkdownIdeaRepository:
                 "## Agent Notes",
                 card.agent_notes,
                 "",
-                "## Original Comment",
+                "## Original Brief",
                 card.human_comment,
                 "",
             ]

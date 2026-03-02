@@ -3,12 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from pathlib import Path
 from typing import Sequence
 
+from idea_factory.domain.ideation import (
+    IDEATION_CREATIVE_ANGLES,
+    IDEATION_DOMAIN_PROFILES,
+    IdeationDomainProfile,
+    clamp_idea_generation_count,
+)
 from idea_factory.domain.models import DecisionAction, IdeaCard, IdeaStatus
 from idea_factory.domain.policies import status_for_decision
 from idea_factory.services.ports import (
+    AutonomousIdeationPort,
     ClockPort,
     IdGeneratorPort,
     IdeaRepositoryPort,
@@ -22,6 +30,15 @@ class SavedIdeaResult:
 
     card: IdeaCard
     path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class SavedIdeaBatchResult:
+    """Result returned after persisting a batch of autonomous ideas."""
+
+    generated_count: int
+    cards: tuple[IdeaCard, ...]
+    paths: tuple[Path, ...]
 
 
 class CreateIdeaFromCommentUseCase:
@@ -84,6 +101,115 @@ class CreateIdeaFromCommentUseCase:
         )
         path = self._repository.save(card)
         return SavedIdeaResult(card=card, path=path)
+
+
+class GenerateAutonomousIdeasUseCase:
+    """Generate structured inbox ideas across multiple domains."""
+
+    def __init__(
+        self,
+        *,
+        ideation_llm: AutonomousIdeationPort,
+        repository: IdeaRepositoryPort,
+        clock: ClockPort,
+        id_generator: IdGeneratorPort,
+    ) -> None:
+        self._ideation_llm = ideation_llm
+        self._repository = repository
+        self._clock = clock
+        self._id_generator = id_generator
+
+    def execute(
+        self,
+        *,
+        requested_count: int,
+        seed_context: str = "",
+    ) -> SavedIdeaBatchResult:
+        """Generate and persist inbox ideas.
+
+        Args:
+            requested_count: Desired idea count. Values are clamped to 1..100.
+            seed_context: Optional extra guidance for the generator.
+
+        Returns:
+            Persisted cards and file paths.
+        """
+
+        target_count = clamp_idea_generation_count(requested_count)
+        clean_seed = " ".join(seed_context.split())
+        plans = self._build_generation_plan(target_count)
+
+        saved_cards: list[IdeaCard] = []
+        saved_paths: list[Path] = []
+        sequence_offset = 0
+
+        for plan_index, (domain_profile, batch_size) in enumerate(plans):
+            creative_angle = IDEATION_CREATIVE_ANGLES[plan_index % len(IDEATION_CREATIVE_ANGLES)]
+            drafts = self._ideation_llm.generate_ideas(
+                batch_size=batch_size,
+                seed_context=clean_seed,
+                domain_profile=domain_profile,
+                creative_angle=creative_angle,
+            )
+            for draft in drafts[:batch_size]:
+                created_at = self._clock.now() + timedelta(microseconds=sequence_offset)
+                sequence_offset += 1
+                origin_context = self._build_origin_context(
+                    seed_context=clean_seed,
+                    domain_name=domain_profile.name,
+                    creative_angle=creative_angle,
+                )
+                card = IdeaCard(
+                    idea_id=self._id_generator.new_id(created_at),
+                    status=IdeaStatus.INBOX,
+                    created_at=created_at,
+                    title=draft.title,
+                    one_liner=draft.one_liner,
+                    problem=draft.problem,
+                    target_user=draft.target_user,
+                    why_subscription=draft.why_subscription,
+                    acquisition_channel=draft.acquisition_channel,
+                    key_features=draft.key_features,
+                    risks=draft.risks,
+                    source_signals=draft.source_signals,
+                    agent_notes=draft.agent_notes,
+                    human_comment=origin_context,
+                    score=draft.score,
+                )
+                saved_cards.append(card)
+                saved_paths.append(self._repository.save(card))
+
+        return SavedIdeaBatchResult(
+            generated_count=len(saved_cards),
+            cards=tuple(saved_cards),
+            paths=tuple(saved_paths),
+        )
+
+    def _build_generation_plan(
+        self,
+        target_count: int,
+    ) -> list[tuple[IdeationDomainProfile, int]]:
+        domain_count = min(len(IDEATION_DOMAIN_PROFILES), target_count)
+        base_batch = target_count // domain_count
+        remainder = target_count % domain_count
+
+        plans: list[tuple[IdeationDomainProfile, int]] = []
+        for index in range(domain_count):
+            batch_size = base_batch + (1 if index < remainder else 0)
+            plans.append((IDEATION_DOMAIN_PROFILES[index], batch_size))
+        return plans
+
+    def _build_origin_context(
+        self,
+        *,
+        seed_context: str,
+        domain_name: str,
+        creative_angle: str,
+    ) -> str:
+        base_line = f"Autonomous batch for domain: {domain_name}. Angle: {creative_angle}"
+        if not seed_context:
+            return base_line
+        return f"{base_line} Seed context: {seed_context}"
 
 
 class ListIdeasByStatusUseCase:
