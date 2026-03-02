@@ -25,28 +25,28 @@ class HeuristicIdeaStructurer:
 
         normalized = " ".join(raw_comment.split())
         title_words = normalized.split()[:6]
-        title = " ".join(word.capitalize() for word in title_words) or "Untitled Idea"
+        title = " ".join(word.capitalize() for word in title_words) or "Идея Без Названия"
         features = self._feature_hints(normalized)
         return StructuredIdeaDraft(
             title=title,
             one_liner=normalized,
             problem=normalized,
-            target_user="Needs manual refinement based on the original comment.",
+            target_user="Нужно вручную уточнить целевую аудиторию на основе исходного комментария.",
             why_subscription=(
-                "Recurring value is plausible if the workflow happens regularly, "
-                "but this still needs market validation."
+                "Подписка выглядит возможной, если этот сценарий повторяется регулярно, "
+                "но ценность ещё нужно проверить на рынке."
             ),
-            acquisition_channel="Validate SEO, directories, or ecosystem marketplaces.",
+            acquisition_channel="Проверь SEO, каталоги и маркетплейсы экосистем.",
             key_features=tuple(features),
             risks=(
-                "Problem severity may be overstated in the original note.",
-                "Subscription value is not yet validated.",
-                "Further competitor research is still needed.",
+                "Сила боли может быть завышена в исходной заметке.",
+                "Подписочная ценность пока не подтверждена.",
+                "Нужно дополнительное исследование конкурентов.",
             ),
-            source_signals=("Manual comment",),
+            source_signals=("Ручной комментарий",),
             agent_notes=(
-                "Generated without OpenRouter. Review and refine before handing "
-                "this brief to Codex for implementation."
+                "Сгенерировано без OpenRouter. Перед передачей в Codex стоит "
+                "проверить и доработать этот бриф."
             ),
             score=None,
         )
@@ -72,65 +72,65 @@ class HeuristicIdeaStructurer:
         """
 
         theme_pool = (
-            "monitoring",
-            "alerts",
-            "forecasting",
-            "reconciliation",
-            "audit trails",
-            "retention",
-            "recovery",
-            "reporting",
+            "мониторинг",
+            "алерты",
+            "прогнозирование",
+            "сверка",
+            "аудит",
+            "удержание",
+            "восстановление",
+            "отчётность",
         )
         outcome_pool = (
-            "prevent revenue leaks",
-            "reduce manual review time",
-            "catch anomalies earlier",
-            "improve weekly decisions",
-            "increase retention",
-            "tighten operational discipline",
+            "снижать потери в выручке",
+            "сокращать ручную проверку",
+            "раньше ловить аномалии",
+            "улучшать еженедельные решения",
+            "повышать удержание",
+            "усиливать операционную дисциплину",
         )
-        context_suffix = f" Seed context: {seed_context}" if seed_context else ""
+        context_suffix = f" Контекст: {seed_context}" if seed_context else ""
 
         drafts: list[StructuredIdeaDraft] = []
         for index in range(batch_size):
             theme = theme_pool[index % len(theme_pool)]
             outcome = outcome_pool[index % len(outcome_pool)]
-            title = f"{domain_profile.name} {theme.title()} Copilot {index + 1}"
+            title = f"{domain_profile.name}: {theme.title()} {index + 1}"
             drafts.append(
                 StructuredIdeaDraft(
                     title=title,
                     one_liner=(
-                        f"Self-serve SaaS for {domain_profile.audience} that uses {theme} "
-                        f"to {outcome}."
+                        f"Self-serve SaaS для {domain_profile.audience}, который использует "
+                        f"{theme}, чтобы {outcome}."
                     ),
                     problem=(
-                        f"{domain_profile.audience} repeatedly handle manual workflows around "
-                        f"{domain_profile.recurring_value}, which are slow and error-prone."
+                        f"{domain_profile.audience} постоянно вручную решают задачи вокруг "
+                        f"{domain_profile.recurring_value}, из-за чего процесс становится медленным и ошибочным."
                     ),
                     target_user=domain_profile.audience,
                     why_subscription=(
-                        f"The workflow repeats constantly, and teams keep paying to {outcome} "
-                        "without hiring extra operators."
+                        f"Сценарий повторяется постоянно, и команды готовы платить за то, чтобы {outcome} "
+                        "без найма дополнительных людей."
                     ),
                     acquisition_channel=domain_profile.acquisition_channel,
                     key_features=(
-                        f"Automated {theme} dashboard tailored to {domain_profile.name}",
-                        "Recurring email or Slack summaries with actionable changes",
-                        "Threshold-based alerts with weekly trend explanations",
+                        f"Автоматизированный модуль {theme} под {domain_profile.name}",
+                        "Регулярные email- или Slack-сводки с понятными действиями",
+                        "Пороговые алерты с объяснением недельных изменений",
                     ),
                     risks=(
                         domain_profile.constraints,
-                        "Value proposition still needs real customer interviews.",
-                        "Integration friction can reduce activation if setup is too heavy.",
+                        "Ценность нужно подтвердить через реальные интервью с пользователями.",
+                        "Слишком тяжёлая интеграция может убить активацию.",
                     ),
                     source_signals=(
-                        f"Autonomous ideation: {domain_profile.name}",
-                        f"Creative angle: {creative_angle}",
-                        f"Heuristic mode.{context_suffix}".strip(),
+                        f"Автономная генерация: {domain_profile.name}",
+                        f"Угол генерации: {creative_angle}",
+                        f"Эвристический режим.{context_suffix}".strip(),
                     ),
                     agent_notes=(
-                        f"Generated heuristically for {domain_profile.name}. "
-                        f"Angle: {creative_angle}.{context_suffix}"
+                        f"Сгенерировано эвристически для домена {domain_profile.name}. "
+                        f"Угол: {creative_angle}.{context_suffix}"
                     ),
                     score=float(6 + (index % 4)),
                 )
@@ -141,13 +141,13 @@ class HeuristicIdeaStructurer:
         phrases = [chunk.strip(" ,.") for chunk in raw_comment.split(",") if chunk.strip(" ,.")]
         if not phrases:
             return [
-                "Capture the core workflow from the original comment.",
-                "Clarify the primary user outcome.",
-                "Define one recurring feature that supports subscriptions.",
+                "Зафиксировать основной рабочий сценарий из комментария.",
+                "Уточнить главный результат для пользователя.",
+                "Добавить повторяющуюся функцию, которая поддерживает подписку.",
             ]
-        features = [f"Support: {phrase}" for phrase in phrases[:3]]
+        features = [f"Поддержать сценарий: {phrase}" for phrase in phrases[:3]]
         while len(features) < 3:
-            features.append("Refine the MVP scope before development.")
+            features.append("Уточнить границы MVP перед разработкой.")
         return features
 
 
@@ -194,7 +194,8 @@ class OpenRouterIdeaStructurer:
                         "risks, source_signals, agent_notes, score. "
                         "Use arrays for key_features, risks, source_signals. "
                         "Set score to a number from 1 to 10. "
-                        "Keep output concise and practical."
+                        "Keep output concise and practical. "
+                        "Write every field value in Russian."
                     ),
                 },
                 {
@@ -268,7 +269,7 @@ class OpenRouterIdeaStructurer:
                         "agent_notes, score. Use arrays for key_features, risks, "
                         "source_signals. Score must be a number from 1 to 10. "
                         "Generate ideas that can be sold self-serve and do not require "
-                        "manual outbound sales."
+                        "manual outbound sales. Write every field value in Russian."
                     ),
                 },
                 {
@@ -402,6 +403,7 @@ class OpenRouterIdeaStructurer:
             "- Avoid agency work, consulting-heavy onboarding, and generic AI wrappers.\n"
             "- Keep ideas different from each other inside this batch.\n"
             "- Give each idea a realistic score from 1 to 10 based on market strength.\n"
+            "- Write the resulting ideas in Russian.\n"
             f"Optional seed context: {seed_context or 'None'}"
         )
 

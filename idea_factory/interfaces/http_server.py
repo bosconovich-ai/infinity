@@ -192,6 +192,19 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       background: #fff;
       border-radius: 12px;
     }}
+    .loading {{
+      display: none;
+      margin-top: 12px;
+      padding: 12px 14px;
+      border: 1px solid #d7c6a8;
+      background: #fff4df;
+      border-radius: 12px;
+      color: #6b4a12;
+      font-size: 0.95rem;
+    }}
+    .loading.visible {{
+      display: block;
+    }}
     .layout {{
       display: grid;
       grid-template-columns: minmax(320px, 1.1fr) minmax(280px, 1fr);
@@ -251,6 +264,12 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
     button[value="dont"] {{
       background: var(--danger);
     }}
+    button[disabled],
+    input[disabled],
+    textarea[disabled] {{
+      opacity: 0.6;
+      cursor: wait;
+    }}
     .columns {{
       display: grid;
       gap: 14px;
@@ -295,12 +314,13 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
     <h1>Фабрика идей</h1>
     <p class="lead">Запускай автономную генерацию по разным доменам или оставляй идею вручную. Приложение сохраняет структурированные брифы в папки, которые потом можно спокойно просмотреть и передать в Codex.</p>
     {flash}
+    <div id="loading-indicator" class="loading" aria-live="polite"></div>
     <div class="layout">
       <section class="columns">
         <section class="panel">
           <h2>Автономная генерация</h2>
           <p class="meta">Генерирует до 100 идей, ротирует домены и углы промпта, подтягивает рыночные сигналы, использует повышенную креативность модели и сама ставит оценку от 1 до 10.</p>
-          <form method="post" action="/generate">
+          <form method="post" action="/generate" data-loading-message="Идёт генерация идей. Это может занять до минуты из-за скрапинга и вызова модели.">
             <textarea name="seed_context" placeholder="Необязательные вводные: какие рынки тебе интересны, какие продукты предпочитать, чего избегать..."></textarea>
             <div class="actions">
               <input type="number" name="count" min="1" max="100" value="12">
@@ -310,7 +330,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         </section>
         <section class="panel">
           <h2>Ручной ввод</h2>
-          <form method="post" action="/submit">
+          <form method="post" action="/submit" data-loading-message="Идёт обработка идеи и сохранение карточки.">
             <textarea name="comment" placeholder="Опиши процесс, боль, кто платит, или просто набросай идею проекта..."></textarea>
             <div class="actions">
               <button type="submit" name="decision" value="do">Делать</button>
@@ -325,6 +345,24 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       </section>
     </div>
   </main>
+  <script>
+    (function () {{
+      const indicator = document.getElementById("loading-indicator");
+      if (!indicator) {{
+        return;
+      }}
+      for (const form of document.querySelectorAll("form[data-loading-message]")) {{
+        form.addEventListener("submit", () => {{
+          const message = form.getAttribute("data-loading-message") || "Идёт обработка...";
+          indicator.textContent = message;
+          indicator.classList.add("visible");
+          for (const field of form.querySelectorAll("button, input, textarea")) {{
+            field.disabled = true;
+          }}
+        }});
+      }}
+    }})();
+  </script>
 </body>
 </html>"""
 
