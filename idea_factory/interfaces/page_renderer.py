@@ -151,6 +151,18 @@ def render_page(
     button[value="dont"] {{
       background: var(--danger);
     }}
+    button[name="target_status"][value="inbox"] {{
+      background: #5d6472;
+    }}
+    button[name="target_status"][value="approved"] {{
+      background: var(--accent);
+    }}
+    button[name="target_status"][value="incubating"] {{
+      background: var(--warn);
+    }}
+    button[name="target_status"][value="rejected"] {{
+      background: var(--danger);
+    }}
     button[disabled],
     input[disabled],
     textarea[disabled] {{
