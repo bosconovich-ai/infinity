@@ -1,0 +1,17 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${COMPOSE_PROJECT_NAME:-idea-factory}:local
+    environment:
+      APP_PORT: ${APP_PORT:-8000}
+      IDEA_FACTORY_HOST: 0.0.0.0
+      IDEA_STORAGE_ROOT: ${IDEA_STORAGE_ROOT:-/data/ideas}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENROUTER_MODEL: ${OPENROUTER_MODEL:-qwen/qwen2.5-7b-instruct}
+    ports:
+      - "127.0.0.1:${HOST_PORT:-18000}:${APP_PORT:-8000}"
+    volumes:
+      - ./ideas:${IDEA_STORAGE_ROOT:-/data/ideas}
+    restart: unless-stopped

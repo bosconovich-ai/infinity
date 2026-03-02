@@ -37,6 +37,10 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         """Render the main HTML page."""
 
         parsed = urlparse(self.path)
+        if parsed.path == "/health":
+            self._send_text("ok")
+            return
+
         if parsed.path != "/":
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
@@ -86,6 +90,14 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         body = content.encode("utf-8")
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_text(self, content: str) -> None:
+        body = content.encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -294,11 +306,24 @@ def build_app_context() -> AppContext:
     return AppContext(create_idea=create_idea, list_ideas=list_ideas)
 
 
+def resolve_server_host() -> str:
+    """Resolve the HTTP bind host from environment variables."""
+
+    return os.getenv("IDEA_FACTORY_HOST", "127.0.0.1")
+
+
+def resolve_server_port() -> int:
+    """Resolve the HTTP bind port, preferring explicit app-level overrides."""
+
+    port_value = os.getenv("IDEA_FACTORY_PORT") or os.getenv("APP_PORT", "8000")
+    return int(port_value)
+
+
 def main() -> None:
     """Start the local HTTP server."""
 
-    host = os.getenv("IDEA_FACTORY_HOST", "127.0.0.1")
-    port = int(os.getenv("IDEA_FACTORY_PORT", "8000"))
+    host = resolve_server_host()
+    port = resolve_server_port()
     handler = IdeaFactoryHandler
     handler.context = build_app_context()
     server = ThreadingHTTPServer((host, port), handler)
