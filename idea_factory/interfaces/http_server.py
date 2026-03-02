@@ -179,6 +179,7 @@ def build_app_context() -> AppContext:
         id_generator=TimestampIdGenerator(),
         signal_sampler=signal_sampler,
         signals_per_domain=resolve_signal_limit_per_domain(),
+        max_parallel_requests=resolve_generation_parallel_requests(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
     move_idea = MoveIdeaUseCase(repository=repository)
@@ -222,6 +223,17 @@ def resolve_signal_limit_per_domain() -> int:
     except ValueError:
         return 2
     return max(1, min(12, numeric))
+
+
+def resolve_generation_parallel_requests() -> int:
+    """Resolve how many autonomous ideation requests can run in parallel."""
+
+    raw_value = os.getenv("AUTONOMOUS_GENERATION_PARALLEL_REQUESTS", "8")
+    try:
+        numeric = int(raw_value)
+    except ValueError:
+        return 8
+    return max(1, min(24, numeric))
 
 
 def resolve_signal_refresh_limit_per_domain() -> int:

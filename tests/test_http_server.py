@@ -10,6 +10,7 @@ from unittest.mock import patch
 from idea_factory.interfaces.http_server import (
     build_signal_sampler,
     parse_generation_count,
+    resolve_generation_parallel_requests,
     resolve_signal_refresh_interval_seconds,
     resolve_signal_refresh_limit_per_domain,
     resolve_signal_limit_per_domain,
@@ -71,6 +72,26 @@ class ResolveSignalLimitPerDomainTests(unittest.TestCase):
     def test_clamps_limit_to_supported_range(self) -> None:
         with patch.dict(os.environ, {"MARKET_SIGNAL_LIMIT_PER_DOMAIN": "50"}, clear=True):
             self.assertEqual(resolve_signal_limit_per_domain(), 12)
+
+
+class ResolveGenerationParallelRequestsTests(unittest.TestCase):
+    """Verify autonomous request parallelism stays bounded."""
+
+    def test_uses_default_when_invalid(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AUTONOMOUS_GENERATION_PARALLEL_REQUESTS": "abc"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_generation_parallel_requests(), 8)
+
+    def test_clamps_parallelism_to_supported_range(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"AUTONOMOUS_GENERATION_PARALLEL_REQUESTS": "100"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_generation_parallel_requests(), 24)
 
 
 class ResolveSignalRefreshLimitPerDomainTests(unittest.TestCase):

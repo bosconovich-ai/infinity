@@ -20,6 +20,7 @@ Then open `http://127.0.0.1:8000`.
 - `OPENROUTER_API_KEY`: Optional. Enables external LLM structuring.
 - `OPENROUTER_MODEL`: Optional. Defaults to `qwen/qwen3.5-397b-a17b`.
 - `OPENROUTER_IDEATION_TEMPERATURE`: Optional. Defaults to `1.15` for autonomous generation.
+- `AUTONOMOUS_GENERATION_PARALLEL_REQUESTS`: Optional. Defaults to `8`.
 - `IDEA_STORAGE_ROOT`: Optional. Defaults to `./ideas`.
 - `IDEA_FACTORY_HOST`: Optional. Defaults to `127.0.0.1`.
 - `IDEA_FACTORY_PORT`: Optional. Defaults to `8000`.
@@ -34,7 +35,8 @@ Then open `http://127.0.0.1:8000`.
 
 - Generate up to 100 ideas into `ideas/inbox`.
 - The generator rotates through multiple domain profiles.
-- Each batch mutates its prompt with a different creative angle.
+- Each idea uses its own request and rotates domain plus creative angle.
+- The requests run in parallel to cut total wait time for larger batches.
 - A daemon scraper keeps refreshing cached market signals from Reddit and GitHub issues.
 - The generator samples random signals from the local cache instead of waiting on live scraping per click.
 - The model self-scores each idea from `1` to `10`.

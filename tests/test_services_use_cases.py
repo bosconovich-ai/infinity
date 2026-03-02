@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from datetime import UTC, datetime
 from pathlib import Path
@@ -21,6 +22,10 @@ from idea_factory.services.use_cases import (
 
 class FakeLLM:
     """Return a stable draft for tests."""
+
+    def __init__(self) -> None:
+        self.batch_sizes: list[int] = []
+        self._lock = threading.Lock()
 
     def structure_comment(self, raw_comment: str) -> StructuredIdeaDraft:
         return StructuredIdeaDraft(
@@ -45,6 +50,8 @@ class FakeLLM:
         domain_profile: IdeationDomainProfile,
         creative_angle: str,
     ) -> tuple[StructuredIdeaDraft, ...]:
+        with self._lock:
+            self.batch_sizes.append(batch_size)
         drafts = []
         for index in range(batch_size):
             drafts.append(
@@ -144,8 +151,9 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
     def test_generates_inbox_cards(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repository = MarkdownIdeaRepository(Path(temp_dir))
+            llm = FakeLLM()
             use_case = GenerateAutonomousIdeasUseCase(
-                ideation_llm=FakeLLM(),
+                ideation_llm=llm,
                 repository=repository,
                 clock=FixedClock(),
                 id_generator=FixedIdGenerator(),
@@ -161,6 +169,7 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
             self.assertTrue(all(card.status == IdeaStatus.INBOX for card in result.cards))
             self.assertTrue(all(path.exists() for path in result.paths))
             self.assertTrue(all("inbox" in str(path) for path in result.paths))
+            self.assertEqual(llm.batch_sizes, [1, 1, 1])
 
     def test_caps_requested_count_at_100(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -13,7 +14,7 @@ from idea_factory.domain.ideation import (
     IdeationDomainProfile,
     clamp_idea_generation_count,
 )
-from idea_factory.domain.models import DecisionAction, IdeaCard, IdeaStatus
+from idea_factory.domain.models import DecisionAction, IdeaCard, IdeaStatus, StructuredIdeaDraft
 from idea_factory.domain.policies import status_for_decision
 from idea_factory.domain.signals import MarketSignal
 from idea_factory.services.ports import (
@@ -49,6 +50,17 @@ class ReviewedIdeaResult:
 
     card: IdeaCard
     path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class IdeaGenerationTask:
+    """One parallel autonomous ideation request."""
+
+    task_index: int
+    domain_profile: IdeationDomainProfile
+    creative_angle: str
+    generation_context: str
+    signals: tuple[MarketSignal, ...]
 
 
 class CreateIdeaFromCommentUseCase:
@@ -125,6 +137,7 @@ class GenerateAutonomousIdeasUseCase:
         id_generator: IdGeneratorPort,
         signal_sampler: SignalSamplerPort | None = None,
         signals_per_domain: int = 6,
+        max_parallel_requests: int = 6,
     ) -> None:
         self._ideation_llm = ideation_llm
         self._repository = repository
@@ -132,6 +145,7 @@ class GenerateAutonomousIdeasUseCase:
         self._id_generator = id_generator
         self._signal_sampler = signal_sampler
         self._signals_per_domain = signals_per_domain
+        self._max_parallel_requests = max(1, max_parallel_requests)
 
     def execute(
         self,
@@ -151,56 +165,42 @@ class GenerateAutonomousIdeasUseCase:
 
         target_count = clamp_idea_generation_count(requested_count)
         clean_seed = " ".join(seed_context.split())
-        plans = self._build_generation_plan(target_count)
+        tasks = self._build_generation_tasks(target_count=target_count, seed_context=clean_seed)
 
         saved_cards: list[IdeaCard] = []
         saved_paths: list[Path] = []
         sequence_offset = 0
+        drafts_by_index = self._generate_drafts(tasks)
 
-        for plan_index, (domain_profile, batch_size) in enumerate(plans):
-            creative_angle = IDEATION_CREATIVE_ANGLES[plan_index % len(IDEATION_CREATIVE_ANGLES)]
-            signals = self._sample_signals(
-                domain_profile=domain_profile,
-                seed_context=clean_seed,
+        for task in tasks:
+            draft = drafts_by_index[task.task_index]
+            created_at = self._clock.now() + timedelta(microseconds=sequence_offset)
+            sequence_offset += 1
+            origin_context = self._build_origin_context(
+                seed_context=task.generation_context,
+                domain_name=task.domain_profile.name,
+                creative_angle=task.creative_angle,
+                signals=task.signals,
             )
-            generation_context = self._merge_seed_context(
-                seed_context=clean_seed,
-                signals=signals,
+            card = IdeaCard(
+                idea_id=self._id_generator.new_id(created_at),
+                status=IdeaStatus.INBOX,
+                created_at=created_at,
+                title=draft.title,
+                one_liner=draft.one_liner,
+                problem=draft.problem,
+                target_user=draft.target_user,
+                why_subscription=draft.why_subscription,
+                acquisition_channel=draft.acquisition_channel,
+                key_features=draft.key_features,
+                risks=draft.risks,
+                source_signals=draft.source_signals,
+                agent_notes=draft.agent_notes,
+                human_comment=origin_context,
+                score=draft.score,
             )
-            drafts = self._ideation_llm.generate_ideas(
-                batch_size=batch_size,
-                seed_context=generation_context,
-                domain_profile=domain_profile,
-                creative_angle=creative_angle,
-            )
-            for draft in drafts[:batch_size]:
-                created_at = self._clock.now() + timedelta(microseconds=sequence_offset)
-                sequence_offset += 1
-                origin_context = self._build_origin_context(
-                    seed_context=generation_context,
-                    domain_name=domain_profile.name,
-                    creative_angle=creative_angle,
-                    signals=signals,
-                )
-                card = IdeaCard(
-                    idea_id=self._id_generator.new_id(created_at),
-                    status=IdeaStatus.INBOX,
-                    created_at=created_at,
-                    title=draft.title,
-                    one_liner=draft.one_liner,
-                    problem=draft.problem,
-                    target_user=draft.target_user,
-                    why_subscription=draft.why_subscription,
-                    acquisition_channel=draft.acquisition_channel,
-                    key_features=draft.key_features,
-                    risks=draft.risks,
-                    source_signals=draft.source_signals,
-                    agent_notes=draft.agent_notes,
-                    human_comment=origin_context,
-                    score=draft.score,
-                )
-                saved_cards.append(card)
-                saved_paths.append(self._repository.save(card))
+            saved_cards.append(card)
+            saved_paths.append(self._repository.save(card))
 
         return SavedIdeaBatchResult(
             generated_count=len(saved_cards),
@@ -208,19 +208,60 @@ class GenerateAutonomousIdeasUseCase:
             paths=tuple(saved_paths),
         )
 
-    def _build_generation_plan(
+    def _build_generation_tasks(
         self,
+        *,
         target_count: int,
-    ) -> list[tuple[IdeationDomainProfile, int]]:
-        domain_count = min(len(IDEATION_DOMAIN_PROFILES), target_count)
-        base_batch = target_count // domain_count
-        remainder = target_count % domain_count
+        seed_context: str,
+    ) -> list[IdeaGenerationTask]:
+        tasks: list[IdeaGenerationTask] = []
+        for task_index in range(target_count):
+            domain_profile = IDEATION_DOMAIN_PROFILES[task_index % len(IDEATION_DOMAIN_PROFILES)]
+            creative_angle = IDEATION_CREATIVE_ANGLES[task_index % len(IDEATION_CREATIVE_ANGLES)]
+            signals = self._sample_signals(
+                domain_profile=domain_profile,
+                seed_context=seed_context,
+            )
+            generation_context = self._merge_seed_context(
+                seed_context=seed_context,
+                signals=signals,
+            )
+            tasks.append(
+                IdeaGenerationTask(
+                    task_index=task_index,
+                    domain_profile=domain_profile,
+                    creative_angle=creative_angle,
+                    generation_context=generation_context,
+                    signals=signals,
+                )
+            )
+        return tasks
 
-        plans: list[tuple[IdeationDomainProfile, int]] = []
-        for index in range(domain_count):
-            batch_size = base_batch + (1 if index < remainder else 0)
-            plans.append((IDEATION_DOMAIN_PROFILES[index], batch_size))
-        return plans
+    def _generate_drafts(
+        self,
+        tasks: Sequence[IdeaGenerationTask],
+    ) -> dict[int, StructuredIdeaDraft]:
+        max_workers = min(len(tasks), self._max_parallel_requests)
+        futures: dict[Future[StructuredIdeaDraft], int] = {}
+        drafts_by_index: dict[int, StructuredIdeaDraft] = {}
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for task in tasks:
+                future = executor.submit(self._generate_single_draft, task)
+                futures[future] = task.task_index
+            for future, task_index in futures.items():
+                drafts_by_index[task_index] = future.result()
+        return drafts_by_index
+
+    def _generate_single_draft(self, task: IdeaGenerationTask) -> StructuredIdeaDraft:
+        drafts = self._ideation_llm.generate_ideas(
+            batch_size=1,
+            seed_context=task.generation_context,
+            domain_profile=task.domain_profile,
+            creative_angle=task.creative_angle,
+        )
+        if not drafts:
+            raise ValueError("Autonomous ideation returned no drafts.")
+        return drafts[0]
 
     def _sample_signals(
         self,
