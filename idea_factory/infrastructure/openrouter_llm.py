@@ -73,7 +73,7 @@ class OpenRouterIdeaStructurer:
         self,
         *,
         api_key: str,
-        model: str = "qwen/qwen2.5-7b-instruct",
+        model: str = "qwen/qwen3.5-397b-a17b",
         fallback: HeuristicIdeaStructurer | None = None,
         timeout_seconds: int = 20,
     ) -> None:
@@ -201,7 +201,7 @@ def build_default_structurer() -> HeuristicIdeaStructurer | OpenRouterIdeaStruct
     """Build the default LLM adapter from environment variables."""
 
     api_key = os.getenv("OPENROUTER_API_KEY")
-    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen2.5-7b-instruct")
+    model = os.getenv("OPENROUTER_MODEL", "qwen/qwen3.5-397b-a17b")
     if not api_key:
         return HeuristicIdeaStructurer()
     return OpenRouterIdeaStructurer(api_key=api_key, model=model)

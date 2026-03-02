@@ -18,7 +18,7 @@ Then open `http://127.0.0.1:8000`.
 ## Environment
 
 - `OPENROUTER_API_KEY`: Optional. Enables external LLM structuring.
-- `OPENROUTER_MODEL`: Optional. Defaults to `qwen/qwen2.5-7b-instruct`.
+- `OPENROUTER_MODEL`: Optional. Defaults to `qwen/qwen3.5-397b-a17b`.
 - `IDEA_STORAGE_ROOT`: Optional. Defaults to `./ideas`.
 - `IDEA_FACTORY_HOST`: Optional. Defaults to `127.0.0.1`.
 - `IDEA_FACTORY_PORT`: Optional. Defaults to `8000`.
