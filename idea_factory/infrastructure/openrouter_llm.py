@@ -29,14 +29,29 @@ class HeuristicIdeaStructurer:
         features = self._feature_hints(normalized)
         return StructuredIdeaDraft(
             title=title,
-            one_liner=normalized,
-            problem=normalized,
-            target_user="Нужно вручную уточнить целевую аудиторию на основе исходного комментария.",
-            why_subscription=(
-                "Подписка выглядит возможной, если этот сценарий повторяется регулярно, "
-                "но ценность ещё нужно проверить на рынке."
+            one_liner=(
+                f"{normalized} Эта идея лучше всего подходит для небольших бизнесов "
+                "или частных специалистов, которым нужен понятный self-serve инструмент. "
+                "Ценность должна быть заметна за короткий срок без длительного внедрения."
             ),
-            acquisition_channel="Проверь SEO, каталоги и маркетплейсы экосистем.",
+            problem=(
+                f"{normalized} Сейчас этот сценарий, вероятно, решается вручную или через "
+                "неудобную связку инструментов, из-за чего теряются время и деньги. "
+                "Если сделать решение простым и узким, его можно продавать без длинных продаж."
+            ),
+            target_user=(
+                "Небольшие бизнесы, индивидуальные предприниматели и частные специалисты, "
+                "которым нужна быстрая ценность без сложных корпоративных закупок."
+            ),
+            why_subscription=(
+                "Подписка выглядит возможной, если этот сценарий повторяется регулярно и "
+                "помогает экономить время или снижать потери каждую неделю. "
+                "Для малого бизнеса это должно окупаться без долгого согласования бюджета."
+            ),
+            acquisition_channel=(
+                "Проверь SEO, каталоги интеграций, маркетплейсы экосистем и сообщества "
+                "малого бизнеса, где решение можно купить без звонка."
+            ),
             key_features=tuple(features),
             risks=(
                 "Сила боли может быть завышена в исходной заметке.",
@@ -100,23 +115,33 @@ class HeuristicIdeaStructurer:
                 StructuredIdeaDraft(
                     title=title,
                     one_liner=(
-                        f"Self-serve SaaS для {domain_profile.audience}, который использует "
-                        f"{theme}, чтобы {outcome}."
+                        f"Self-serve SaaS для небольших бизнесов и частных специалистов в сегменте "
+                        f"'{domain_profile.name}', который использует {theme}, чтобы {outcome}. "
+                        "Продукт должен запускаться быстро, без длинного внедрения и без продаж через созвоны. "
+                        f"Лучший сценарий входа: понятный MVP с узкой пользой для {domain_profile.audience}."
                     ),
                     problem=(
                         f"{domain_profile.audience} постоянно вручную решают задачи вокруг "
-                        f"{domain_profile.recurring_value}, из-за чего процесс становится медленным и ошибочным."
+                        f"{domain_profile.recurring_value}, из-за чего процесс становится медленным и ошибочным. "
+                        "Небольшим командам обычно не хватает отдельного специалиста на такую рутину, "
+                        "поэтому они охотнее покупают простой сервис с быстрой отдачей."
                     ),
-                    target_user=domain_profile.audience,
+                    target_user=(
+                        f"Небольшие бизнесы, маленькие команды и частные специалисты из сегмента: "
+                        f"{domain_profile.audience}. Крупные корпоративные закупки и enterprise-внедрение "
+                        "не являются целевым сценарием."
+                    ),
                     why_subscription=(
                         f"Сценарий повторяется постоянно, и команды готовы платить за то, чтобы {outcome} "
-                        "без найма дополнительных людей."
+                        "без найма дополнительных людей. Для малого бизнеса это должно быть недорогое, "
+                        "понятное решение с регулярной практической пользой."
                     ),
                     acquisition_channel=domain_profile.acquisition_channel,
                     key_features=(
                         f"Автоматизированный модуль {theme} под {domain_profile.name}",
                         "Регулярные email- или Slack-сводки с понятными действиями",
                         "Пороговые алерты с объяснением недельных изменений",
+                        "Небольшая, но заметная фишка для удержания: шаблоны, авто-рекомендации или быстрые действия в один клик",
                     ),
                     risks=(
                         domain_profile.constraints,
@@ -194,8 +219,13 @@ class OpenRouterIdeaStructurer:
                         "risks, source_signals, agent_notes, score. "
                         "Use arrays for key_features, risks, source_signals. "
                         "Set score to a number from 1 to 10. "
-                        "Keep output concise and practical. "
-                        "Write every field value in Russian."
+                        "Keep output practical. "
+                        "Write every field value in Russian. "
+                        "Make one_liner and problem detailed enough to read like 2-3 full sentences, "
+                        "not a short fragment. "
+                        "Explicitly set target_user to small businesses, solo operators, or private individuals "
+                        "when that fits; avoid enterprise buyers by default. "
+                        "Include at least 3 specific product features, with at least one small but memorable UX/product hook."
                     ),
                 },
                 {
@@ -269,7 +299,11 @@ class OpenRouterIdeaStructurer:
                         "agent_notes, score. Use arrays for key_features, risks, "
                         "source_signals. Score must be a number from 1 to 10. "
                         "Generate ideas that can be sold self-serve and do not require "
-                        "manual outbound sales. Write every field value in Russian."
+                        "manual outbound sales. Write every field value in Russian. "
+                        "Make one_liner and problem read as 2-3 full sentences each. "
+                        "Set target_user explicitly and bias it toward small businesses, solo operators, "
+                        "and private individuals. Avoid enterprise-heavy ideas by default. "
+                        "Every idea must include at least 3 specific features and at least one small memorable hook."
                     ),
                 },
                 {
@@ -400,8 +434,14 @@ class OpenRouterIdeaStructurer:
             "Rules:\n"
             "- Ideas must be subscription-friendly micro-SaaS or narrow vertical SaaS.\n"
             "- Prioritize self-serve acquisition and recurring workflows.\n"
+            "- Prioritize small businesses, solo operators, and private individuals as the default buyer.\n"
+            "- Avoid enterprise sales, large corporate procurement, and heavyweight onboarding.\n"
             "- Avoid agency work, consulting-heavy onboarding, and generic AI wrappers.\n"
             "- Keep ideas different from each other inside this batch.\n"
+            "- one_liner must be 2-3 complete sentences, not a short slogan.\n"
+            "- problem must be 2-3 complete sentences with concrete pain and why it matters.\n"
+            "- target_user must explicitly name who we plan to sell to, and it should usually be SMB or individuals.\n"
+            "- key_features must contain concrete, useful product features plus at least one small memorable hook.\n"
             "- Give each idea a realistic score from 1 to 10 based on market strength.\n"
             "- Write the resulting ideas in Russian.\n"
             f"Optional seed context: {seed_context or 'None'}"
