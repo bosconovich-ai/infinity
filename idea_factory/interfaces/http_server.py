@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from idea_factory.domain.models import DecisionAction, IdeaStatus
 from idea_factory.infrastructure.file_repository import MarkdownIdeaRepository
+from idea_factory.infrastructure.market_signals import CompositeMarketSignalCollector
 from idea_factory.infrastructure.openrouter_llm import build_default_structurer
 from idea_factory.infrastructure.runtime import SystemClock, TimestampIdGenerator
 from idea_factory.services.use_cases import (
@@ -295,7 +296,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
       <section class="columns">
         <section class="panel">
           <h2>Autonomous Factory</h2>
-          <p class="meta">Generates up to 100 ideas, rotates domains and prompt angles, uses a higher creativity temperature, and self-scores each idea from 1 to 10.</p>
+          <p class="meta">Generates up to 100 ideas, rotates domains and prompt angles, scrapes live market signals, uses a higher creativity temperature, and self-scores each idea from 1 to 10.</p>
           <form method="post" action="/generate">
             <textarea name="seed_context" placeholder="Optional guidance: domains you like, product shapes to favor, constraints to avoid..."></textarea>
             <div class="actions">
@@ -362,11 +363,14 @@ def build_app_context() -> AppContext:
         clock=SystemClock(),
         id_generator=TimestampIdGenerator(),
     )
+    signal_collector = build_signal_collector()
     generate_autonomous_ideas = GenerateAutonomousIdeasUseCase(
         ideation_llm=structurer,
         repository=repository,
         clock=SystemClock(),
         id_generator=TimestampIdGenerator(),
+        signal_collector=signal_collector,
+        signals_per_domain=resolve_signal_limit_per_domain(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
     return AppContext(
@@ -397,6 +401,26 @@ def parse_generation_count(raw_value: str) -> int:
     except ValueError:
         return 12
     return max(1, min(100, numeric))
+
+
+def resolve_signal_limit_per_domain() -> int:
+    """Resolve how many signals to collect per domain batch."""
+
+    raw_value = os.getenv("MARKET_SIGNAL_LIMIT_PER_DOMAIN", "6")
+    try:
+        numeric = int(raw_value)
+    except ValueError:
+        return 6
+    return max(1, min(12, numeric))
+
+
+def build_signal_collector() -> CompositeMarketSignalCollector | None:
+    """Build the live market signal collector when enabled."""
+
+    enabled = os.getenv("ENABLE_MARKET_SCRAPING", "1")
+    if enabled.lower() in {"0", "false", "no"}:
+        return None
+    return CompositeMarketSignalCollector()
 
 
 def main() -> None:

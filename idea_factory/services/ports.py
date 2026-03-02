@@ -8,6 +8,7 @@ from typing import Protocol, Sequence
 
 from idea_factory.domain.ideation import IdeationDomainProfile
 from idea_factory.domain.models import IdeaCard, IdeaStatus, StructuredIdeaDraft
+from idea_factory.domain.signals import MarketSignal
 
 
 class LLMPort(Protocol):
@@ -29,6 +30,19 @@ class AutonomousIdeationPort(Protocol):
         creative_angle: str,
     ) -> Sequence[StructuredIdeaDraft]:
         """Generate a batch of structured ideas for one domain focus."""
+
+
+class SignalCollectorPort(Protocol):
+    """Collect live market signals for a given domain."""
+
+    def collect_signals(
+        self,
+        *,
+        domain_profile: IdeationDomainProfile,
+        seed_context: str,
+        limit: int,
+    ) -> Sequence[MarketSignal]:
+        """Return collected market signals."""
 
 
 class IdeaRepositoryPort(Protocol):

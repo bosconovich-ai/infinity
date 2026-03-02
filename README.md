@@ -24,12 +24,16 @@ Then open `http://127.0.0.1:8000`.
 - `IDEA_FACTORY_HOST`: Optional. Defaults to `127.0.0.1`.
 - `IDEA_FACTORY_PORT`: Optional. Defaults to `8000`.
 - `APP_PORT`: Optional fallback for containerized runs when `IDEA_FACTORY_PORT` is not set.
+- `ENABLE_MARKET_SCRAPING`: Optional. Defaults to `1`.
+- `MARKET_SIGNAL_LIMIT_PER_DOMAIN`: Optional. Defaults to `6`.
+- `GITHUB_TOKEN`: Optional. Improves GitHub issue search rate limits.
 
 ## Autonomous Factory
 
 - Generate up to 100 ideas into `ideas/inbox`.
 - The generator rotates through multiple domain profiles.
 - Each batch mutates its prompt with a different creative angle.
+- The generator scrapes live market signals from Reddit and GitHub issues.
 - The model self-scores each idea from `1` to `10`.
 - Optional seed context lets you bias the batch toward specific markets or constraints.
 

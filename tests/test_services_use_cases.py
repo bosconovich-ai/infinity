@@ -9,6 +9,7 @@ from pathlib import Path
 
 from idea_factory.domain.ideation import IdeationDomainProfile
 from idea_factory.domain.models import DecisionAction, IdeaStatus, StructuredIdeaDraft
+from idea_factory.domain.signals import MarketSignal
 from idea_factory.infrastructure.file_repository import MarkdownIdeaRepository
 from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
@@ -75,6 +76,28 @@ class FixedIdGenerator:
 
     def new_id(self, created_at: datetime) -> str:
         return created_at.strftime("idea_%Y%m%d_%H%M%S_%f")
+
+
+class FakeSignalCollector:
+    """Return deterministic market signals for tests."""
+
+    def collect_signals(
+        self,
+        *,
+        domain_profile: IdeationDomainProfile,
+        seed_context: str,
+        limit: int,
+    ) -> tuple[MarketSignal, ...]:
+        return tuple(
+            MarketSignal(
+                source="reddit",
+                query=f"{domain_profile.name} query",
+                title=f"{domain_profile.name} complaint {index + 1}",
+                summary="Operators complain about repeated manual work.",
+                url=f"https://example.com/{index + 1}",
+            )
+            for index in range(limit)
+        )
 
 
 class CreateIdeaFromCommentUseCaseTests(unittest.TestCase):
@@ -151,6 +174,23 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
             result = use_case.execute(requested_count=150)
 
             self.assertEqual(result.generated_count, 100)
+
+    def test_includes_market_signal_context_when_collector_is_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            use_case = GenerateAutonomousIdeasUseCase(
+                ideation_llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+                signal_collector=FakeSignalCollector(),
+                signals_per_domain=2,
+            )
+
+            result = use_case.execute(requested_count=1, seed_context="Prefer SMB tools")
+
+            self.assertIn("Signals:", result.cards[0].human_comment)
+            self.assertIn("Market signals:", result.cards[0].human_comment)
 
 
 class ListIdeasByStatusUseCaseTests(unittest.TestCase):

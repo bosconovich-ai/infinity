@@ -15,12 +15,14 @@ from idea_factory.domain.ideation import (
 )
 from idea_factory.domain.models import DecisionAction, IdeaCard, IdeaStatus
 from idea_factory.domain.policies import status_for_decision
+from idea_factory.domain.signals import MarketSignal
 from idea_factory.services.ports import (
     AutonomousIdeationPort,
     ClockPort,
     IdGeneratorPort,
     IdeaRepositoryPort,
     LLMPort,
+    SignalCollectorPort,
 )
 
 
@@ -113,11 +115,15 @@ class GenerateAutonomousIdeasUseCase:
         repository: IdeaRepositoryPort,
         clock: ClockPort,
         id_generator: IdGeneratorPort,
+        signal_collector: SignalCollectorPort | None = None,
+        signals_per_domain: int = 6,
     ) -> None:
         self._ideation_llm = ideation_llm
         self._repository = repository
         self._clock = clock
         self._id_generator = id_generator
+        self._signal_collector = signal_collector
+        self._signals_per_domain = signals_per_domain
 
     def execute(
         self,
@@ -145,9 +151,17 @@ class GenerateAutonomousIdeasUseCase:
 
         for plan_index, (domain_profile, batch_size) in enumerate(plans):
             creative_angle = IDEATION_CREATIVE_ANGLES[plan_index % len(IDEATION_CREATIVE_ANGLES)]
+            signals = self._collect_signals(
+                domain_profile=domain_profile,
+                seed_context=clean_seed,
+            )
+            generation_context = self._merge_seed_context(
+                seed_context=clean_seed,
+                signals=signals,
+            )
             drafts = self._ideation_llm.generate_ideas(
                 batch_size=batch_size,
-                seed_context=clean_seed,
+                seed_context=generation_context,
                 domain_profile=domain_profile,
                 creative_angle=creative_angle,
             )
@@ -155,9 +169,10 @@ class GenerateAutonomousIdeasUseCase:
                 created_at = self._clock.now() + timedelta(microseconds=sequence_offset)
                 sequence_offset += 1
                 origin_context = self._build_origin_context(
-                    seed_context=clean_seed,
+                    seed_context=generation_context,
                     domain_name=domain_profile.name,
                     creative_angle=creative_angle,
+                    signals=signals,
                 )
                 card = IdeaCard(
                     idea_id=self._id_generator.new_id(created_at),
@@ -199,17 +214,57 @@ class GenerateAutonomousIdeasUseCase:
             plans.append((IDEATION_DOMAIN_PROFILES[index], batch_size))
         return plans
 
+    def _collect_signals(
+        self,
+        *,
+        domain_profile: IdeationDomainProfile,
+        seed_context: str,
+    ) -> tuple[MarketSignal, ...]:
+        if self._signal_collector is None:
+            return ()
+        collected = self._signal_collector.collect_signals(
+            domain_profile=domain_profile,
+            seed_context=seed_context,
+            limit=self._signals_per_domain,
+        )
+        return tuple(collected)
+
+    def _merge_seed_context(
+        self,
+        *,
+        seed_context: str,
+        signals: tuple[MarketSignal, ...],
+    ) -> str:
+        snippets = [seed_context] if seed_context else []
+        if signals:
+            snippets.append(self._format_signals_for_prompt(signals))
+        return " ".join(part for part in snippets if part).strip()
+
     def _build_origin_context(
         self,
         *,
         seed_context: str,
         domain_name: str,
         creative_angle: str,
+        signals: tuple[MarketSignal, ...],
     ) -> str:
         base_line = f"Autonomous batch for domain: {domain_name}. Angle: {creative_angle}"
+        if signals:
+            signal_lines = "; ".join(
+                f"{signal.source}: {signal.title}" for signal in signals[:3]
+            )
+            base_line = f"{base_line} Signals: {signal_lines}"
         if not seed_context:
             return base_line
         return f"{base_line} Seed context: {seed_context}"
+
+    def _format_signals_for_prompt(self, signals: tuple[MarketSignal, ...]) -> str:
+        formatted = []
+        for signal in signals[:4]:
+            formatted.append(
+                f"[{signal.source}] {signal.title}: {signal.summary}"
+            )
+        return " Market signals: " + " | ".join(formatted)
 
 
 class ListIdeasByStatusUseCase:
