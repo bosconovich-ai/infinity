@@ -15,7 +15,7 @@ from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
     GenerateAutonomousIdeasUseCase,
     ListIdeasByStatusUseCase,
-    ReviewInboxIdeaUseCase,
+    MoveIdeaUseCase,
 )
 
 
@@ -194,8 +194,8 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
             self.assertIn("Market signals:", result.cards[0].human_comment)
 
 
-class ReviewInboxIdeaUseCaseTests(unittest.TestCase):
-    """Verify inbox ideas can be moved into review buckets."""
+class MoveIdeaUseCaseTests(unittest.TestCase):
+    """Verify ideas can be moved between visible columns."""
 
     def test_moves_inbox_idea_to_approved(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -208,19 +208,17 @@ class ReviewInboxIdeaUseCaseTests(unittest.TestCase):
             )
             batch_result = generate_use_case.execute(requested_count=1)
 
-            review_use_case = ReviewInboxIdeaUseCase(repository=repository)
-            result = review_use_case.execute(
+            move_use_case = MoveIdeaUseCase(repository=repository)
+            result = move_use_case.execute(
                 idea_id=batch_result.cards[0].idea_id,
-                decision=DecisionAction.DO,
+                target_status=IdeaStatus.APPROVED,
             )
 
             self.assertEqual(result.card.status, IdeaStatus.APPROVED)
             self.assertIn("approved", str(result.path))
-            self.assertIsNone(
-                repository.get_by_id("missing-idea-id"),
-            )
+            self.assertIsNone(repository.get_by_id("missing-idea-id"))
 
-    def test_rejects_review_for_non_inbox_idea(self) -> None:
+    def test_moves_approved_idea_back_to_inbox(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repository = MarkdownIdeaRepository(Path(temp_dir))
             create_use_case = CreateIdeaFromCommentUseCase(
@@ -234,11 +232,34 @@ class ReviewInboxIdeaUseCaseTests(unittest.TestCase):
                 decision=DecisionAction.DO,
             )
 
-            review_use_case = ReviewInboxIdeaUseCase(repository=repository)
+            move_use_case = MoveIdeaUseCase(repository=repository)
+            result = move_use_case.execute(
+                idea_id=saved.card.idea_id,
+                target_status=IdeaStatus.INBOX,
+            )
+
+            self.assertEqual(result.card.status, IdeaStatus.INBOX)
+            self.assertIn("inbox", str(result.path))
+
+    def test_rejects_move_when_target_is_current_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            repository = MarkdownIdeaRepository(Path(temp_dir))
+            create_use_case = CreateIdeaFromCommentUseCase(
+                llm=FakeLLM(),
+                repository=repository,
+                clock=FixedClock(),
+                id_generator=FixedIdGenerator(),
+            )
+            saved = create_use_case.execute(
+                raw_comment="Track refund spikes for Shopify stores",
+                decision=DecisionAction.DO,
+            )
+
+            move_use_case = MoveIdeaUseCase(repository=repository)
             with self.assertRaises(ValueError):
-                review_use_case.execute(
+                move_use_case.execute(
                     idea_id=saved.card.idea_id,
-                    decision=DecisionAction.DONT,
+                    target_status=IdeaStatus.APPROVED,
                 )
 
 

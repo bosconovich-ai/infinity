@@ -285,16 +285,29 @@ def _render_score(score: float | None) -> str:
 
 
 def _render_inbox_actions(card: IdeaCard, *, status: IdeaStatus) -> str:
-    if status is not IdeaStatus.INBOX:
+    actions = []
+    for target_status, label in (
+        (IdeaStatus.INBOX, "В инбокс"),
+        (IdeaStatus.APPROVED, "Готово к запуску"),
+        (IdeaStatus.INCUBATING, "Нужно додумать"),
+        (IdeaStatus.REJECTED, "Отклонено"),
+    ):
+        if target_status is status:
+            continue
+        actions.append(
+            "<button type='submit' "
+            f"name='target_status' value='{html.escape(target_status.value)}'>"
+            f"{html.escape(label)}"
+            "</button>"
+        )
+    if not actions:
         return ""
     return (
-        "<form method='post' action='/review' "
+        "<form method='post' action='/move' "
         "data-loading-message='Идёт перенос идеи в выбранную колонку.'>"
         f"<input type='hidden' name='idea_id' value='{html.escape(card.idea_id)}'>"
         "<div class='actions'>"
-        "<button type='submit' name='decision' value='do'>Готово к запуску</button>"
-        "<button type='submit' name='decision' value='rethink'>Нужно додумать</button>"
-        "<button type='submit' name='decision' value='dont'>Отклонено</button>"
+        f"{''.join(actions)}"
         "</div>"
         "</form>"
     )

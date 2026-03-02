@@ -19,7 +19,7 @@ from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
     GenerateAutonomousIdeasUseCase,
     ListIdeasByStatusUseCase,
-    ReviewInboxIdeaUseCase,
+    MoveIdeaUseCase,
 )
 
 
@@ -30,7 +30,7 @@ class AppContext:
     create_idea: CreateIdeaFromCommentUseCase
     generate_autonomous_ideas: GenerateAutonomousIdeasUseCase
     list_ideas: ListIdeasByStatusUseCase
-    review_inbox_idea: ReviewInboxIdeaUseCase
+    move_idea: MoveIdeaUseCase
 
 
 class IdeaFactoryHandler(BaseHTTPRequestHandler):
@@ -58,7 +58,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         """Handle project comment submission."""
 
         parsed = urlparse(self.path)
-        if parsed.path not in {"/submit", "/generate", "/review"}:
+        if parsed.path not in {"/submit", "/generate", "/move"}:
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
 
@@ -71,7 +71,7 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
             elif parsed.path == "/generate":
                 status_message = self._handle_autonomous_generation(form)
             else:
-                status_message = self._handle_review_submission(form)
+                status_message = self._handle_move_submission(form)
         except Exception as exc:
             status_message = f"Ошибка во время обработки: {exc}"
 
@@ -111,14 +111,14 @@ class IdeaFactoryHandler(BaseHTTPRequestHandler):
         )
         return f"Generated {result.generated_count} inbox ideas."
 
-    def _handle_review_submission(self, form: dict[str, list[str]]) -> str:
+    def _handle_move_submission(self, form: dict[str, list[str]]) -> str:
         idea_id = form.get("idea_id", [""])[0]
-        decision_value = form.get("decision", [""])[0]
+        target_status_value = form.get("target_status", [""])[0]
         if not idea_id:
             return "Не удалось определить идею для разбора."
 
-        decision = DecisionAction(decision_value)
-        result = self.context.review_inbox_idea.execute(idea_id=idea_id, decision=decision)
+        target_status = IdeaStatus(target_status_value)
+        result = self.context.move_idea.execute(idea_id=idea_id, target_status=target_status)
         return (
             f"Идея '{result.card.title}' перенесена в "
             f"{status_label(result.card.status)}."
@@ -176,12 +176,12 @@ def build_app_context() -> AppContext:
         signals_per_domain=resolve_signal_limit_per_domain(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
-    review_inbox_idea = ReviewInboxIdeaUseCase(repository=repository)
+    move_idea = MoveIdeaUseCase(repository=repository)
     return AppContext(
         create_idea=create_idea,
         generate_autonomous_ideas=generate_autonomous_ideas,
         list_ideas=list_ideas,
-        review_inbox_idea=review_inbox_idea,
+        move_idea=move_idea,
     )
 
 
