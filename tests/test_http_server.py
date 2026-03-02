@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import os
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from idea_factory.interfaces.http_server import (
-    build_signal_collector,
+    build_signal_sampler,
     parse_generation_count,
+    resolve_signal_refresh_interval_seconds,
+    resolve_signal_refresh_limit_per_domain,
     resolve_signal_limit_per_domain,
     resolve_server_host,
     resolve_server_port,
@@ -70,9 +73,49 @@ class ResolveSignalLimitPerDomainTests(unittest.TestCase):
             self.assertEqual(resolve_signal_limit_per_domain(), 12)
 
 
-class BuildSignalCollectorTests(unittest.TestCase):
-    """Verify live scraping can be disabled explicitly."""
+class ResolveSignalRefreshLimitPerDomainTests(unittest.TestCase):
+    """Verify cache refresh batch sizing stays bounded."""
+
+    def test_uses_default_when_invalid(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"MARKET_SIGNAL_REFRESH_LIMIT_PER_DOMAIN": "abc"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_signal_refresh_limit_per_domain(), 8)
+
+    def test_clamps_limit_to_supported_range(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"MARKET_SIGNAL_REFRESH_LIMIT_PER_DOMAIN": "50"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_signal_refresh_limit_per_domain(), 24)
+
+
+class ResolveSignalRefreshIntervalSecondsTests(unittest.TestCase):
+    """Verify background refresh timing stays bounded."""
+
+    def test_uses_default_when_invalid(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"MARKET_SIGNAL_REFRESH_INTERVAL_SECONDS": "abc"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_signal_refresh_interval_seconds(), 900)
+
+    def test_clamps_interval_to_supported_range(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"MARKET_SIGNAL_REFRESH_INTERVAL_SECONDS": "5"},
+            clear=True,
+        ):
+            self.assertEqual(resolve_signal_refresh_interval_seconds(), 60)
+
+
+class BuildSignalSamplerTests(unittest.TestCase):
+    """Verify cached scraping can be disabled explicitly."""
 
     def test_returns_none_when_scraping_is_disabled(self) -> None:
         with patch.dict(os.environ, {"ENABLE_MARKET_SCRAPING": "0"}, clear=True):
-            self.assertIsNone(build_signal_collector())
+            self.assertIsNone(build_signal_sampler(storage_root=Path("ideas")))

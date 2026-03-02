@@ -22,7 +22,7 @@ from idea_factory.services.ports import (
     IdGeneratorPort,
     IdeaRepositoryPort,
     LLMPort,
-    SignalCollectorPort,
+    SignalSamplerPort,
 )
 
 
@@ -123,14 +123,14 @@ class GenerateAutonomousIdeasUseCase:
         repository: IdeaRepositoryPort,
         clock: ClockPort,
         id_generator: IdGeneratorPort,
-        signal_collector: SignalCollectorPort | None = None,
+        signal_sampler: SignalSamplerPort | None = None,
         signals_per_domain: int = 6,
     ) -> None:
         self._ideation_llm = ideation_llm
         self._repository = repository
         self._clock = clock
         self._id_generator = id_generator
-        self._signal_collector = signal_collector
+        self._signal_sampler = signal_sampler
         self._signals_per_domain = signals_per_domain
 
     def execute(
@@ -159,7 +159,7 @@ class GenerateAutonomousIdeasUseCase:
 
         for plan_index, (domain_profile, batch_size) in enumerate(plans):
             creative_angle = IDEATION_CREATIVE_ANGLES[plan_index % len(IDEATION_CREATIVE_ANGLES)]
-            signals = self._collect_signals(
+            signals = self._sample_signals(
                 domain_profile=domain_profile,
                 seed_context=clean_seed,
             )
@@ -222,15 +222,15 @@ class GenerateAutonomousIdeasUseCase:
             plans.append((IDEATION_DOMAIN_PROFILES[index], batch_size))
         return plans
 
-    def _collect_signals(
+    def _sample_signals(
         self,
         *,
         domain_profile: IdeationDomainProfile,
         seed_context: str,
     ) -> tuple[MarketSignal, ...]:
-        if self._signal_collector is None:
+        if self._signal_sampler is None:
             return ()
-        collected = self._signal_collector.collect_signals(
+        collected = self._signal_sampler.sample_signals(
             domain_profile=domain_profile,
             seed_context=seed_context,
             limit=self._signals_per_domain,

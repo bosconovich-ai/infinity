@@ -25,7 +25,9 @@ Then open `http://127.0.0.1:8000`.
 - `IDEA_FACTORY_PORT`: Optional. Defaults to `8000`.
 - `APP_PORT`: Optional fallback for containerized runs when `IDEA_FACTORY_PORT` is not set.
 - `ENABLE_MARKET_SCRAPING`: Optional. Defaults to `1`.
-- `MARKET_SIGNAL_LIMIT_PER_DOMAIN`: Optional. Defaults to `6`.
+- `MARKET_SIGNAL_LIMIT_PER_DOMAIN`: Optional. Defaults to `2`. Controls how many cached signals are sampled into one domain batch.
+- `MARKET_SIGNAL_REFRESH_LIMIT_PER_DOMAIN`: Optional. Defaults to `8`. Controls how many fresh signals the background scraper stores per domain refresh.
+- `MARKET_SIGNAL_REFRESH_INTERVAL_SECONDS`: Optional. Defaults to `900`.
 - `GITHUB_TOKEN`: Optional. Improves GitHub issue search rate limits.
 
 ## Autonomous Factory
@@ -33,7 +35,8 @@ Then open `http://127.0.0.1:8000`.
 - Generate up to 100 ideas into `ideas/inbox`.
 - The generator rotates through multiple domain profiles.
 - Each batch mutates its prompt with a different creative angle.
-- The generator scrapes live market signals from Reddit and GitHub issues.
+- A daemon scraper keeps refreshing cached market signals from Reddit and GitHub issues.
+- The generator samples random signals from the local cache instead of waiting on live scraping per click.
 - The model self-scores each idea from `1` to `10`.
 - Optional seed context lets you bias the batch toward specific markets or constraints.
 

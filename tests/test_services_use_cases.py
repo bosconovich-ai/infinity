@@ -79,10 +79,10 @@ class FixedIdGenerator:
         return created_at.strftime("idea_%Y%m%d_%H%M%S_%f")
 
 
-class FakeSignalCollector:
-    """Return deterministic market signals for tests."""
+class FakeSignalSampler:
+    """Return deterministic cached market signals for tests."""
 
-    def collect_signals(
+    def sample_signals(
         self,
         *,
         domain_profile: IdeationDomainProfile,
@@ -176,7 +176,7 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
 
             self.assertEqual(result.generated_count, 100)
 
-    def test_includes_market_signal_context_when_collector_is_present(self) -> None:
+    def test_includes_market_signal_context_when_sampler_is_present(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             repository = MarkdownIdeaRepository(Path(temp_dir))
             use_case = GenerateAutonomousIdeasUseCase(
@@ -184,7 +184,7 @@ class GenerateAutonomousIdeasUseCaseTests(unittest.TestCase):
                 repository=repository,
                 clock=FixedClock(),
                 id_generator=FixedIdGenerator(),
-                signal_collector=FakeSignalCollector(),
+                signal_sampler=FakeSignalSampler(),
                 signals_per_domain=2,
             )
 

@@ -32,17 +32,17 @@ class AutonomousIdeationPort(Protocol):
         """Generate a batch of structured ideas for one domain focus."""
 
 
-class SignalCollectorPort(Protocol):
-    """Collect live market signals for a given domain."""
+class SignalSamplerPort(Protocol):
+    """Read cached market signals for a given domain."""
 
-    def collect_signals(
+    def sample_signals(
         self,
         *,
         domain_profile: IdeationDomainProfile,
         seed_context: str,
         limit: int,
     ) -> Sequence[MarketSignal]:
-        """Return collected market signals."""
+        """Return cached market signals for generation prompts."""
 
 
 class IdeaRepositoryPort(Protocol):

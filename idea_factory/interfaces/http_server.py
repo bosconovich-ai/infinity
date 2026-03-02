@@ -14,6 +14,11 @@ from idea_factory.infrastructure.file_repository import MarkdownIdeaRepository
 from idea_factory.infrastructure.market_signals import CompositeMarketSignalCollector
 from idea_factory.infrastructure.openrouter_llm import build_default_structurer
 from idea_factory.infrastructure.runtime import SystemClock, TimestampIdGenerator
+from idea_factory.infrastructure.signal_cache import (
+    BackgroundSignalRefreshLoop,
+    CachedMarketSignalSampler,
+    JsonSignalCacheRepository,
+)
 from idea_factory.interfaces.page_renderer import render_page
 from idea_factory.services.use_cases import (
     CreateIdeaFromCommentUseCase,
@@ -166,13 +171,13 @@ def build_app_context() -> AppContext:
         clock=SystemClock(),
         id_generator=TimestampIdGenerator(),
     )
-    signal_collector = build_signal_collector()
+    signal_sampler = build_signal_sampler(storage_root=storage_root)
     generate_autonomous_ideas = GenerateAutonomousIdeasUseCase(
         ideation_llm=structurer,
         repository=repository,
         clock=SystemClock(),
         id_generator=TimestampIdGenerator(),
-        signal_collector=signal_collector,
+        signal_sampler=signal_sampler,
         signals_per_domain=resolve_signal_limit_per_domain(),
     )
     list_ideas = ListIdeasByStatusUseCase(repository=repository)
@@ -219,13 +224,43 @@ def resolve_signal_limit_per_domain() -> int:
     return max(1, min(12, numeric))
 
 
-def build_signal_collector() -> CompositeMarketSignalCollector | None:
-    """Build the live market signal collector when enabled."""
+def resolve_signal_refresh_limit_per_domain() -> int:
+    """Resolve how many signals to cache per domain during background refresh."""
+
+    raw_value = os.getenv("MARKET_SIGNAL_REFRESH_LIMIT_PER_DOMAIN", "8")
+    try:
+        numeric = int(raw_value)
+    except ValueError:
+        return 8
+    return max(2, min(24, numeric))
+
+
+def resolve_signal_refresh_interval_seconds() -> int:
+    """Resolve the background refresh interval for scraping."""
+
+    raw_value = os.getenv("MARKET_SIGNAL_REFRESH_INTERVAL_SECONDS", "900")
+    try:
+        numeric = int(raw_value)
+    except ValueError:
+        return 900
+    return max(60, min(86400, numeric))
+
+
+def build_signal_sampler(*, storage_root: Path) -> CachedMarketSignalSampler | None:
+    """Build a cached signal sampler and start background scraping when enabled."""
 
     enabled = os.getenv("ENABLE_MARKET_SCRAPING", "1")
     if enabled.lower() in {"0", "false", "no"}:
         return None
-    return CompositeMarketSignalCollector()
+    cache_repository = JsonSignalCacheRepository(storage_root / "_signals")
+    refresh_loop = BackgroundSignalRefreshLoop(
+        collector=CompositeMarketSignalCollector(),
+        repository=cache_repository,
+        refresh_limit_per_domain=resolve_signal_refresh_limit_per_domain(),
+        interval_seconds=resolve_signal_refresh_interval_seconds(),
+    )
+    refresh_loop.start()
+    return CachedMarketSignalSampler(repository=cache_repository)
 
 
 def status_label(status: IdeaStatus) -> str:
